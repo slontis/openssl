@@ -13,22 +13,31 @@
 # include <time.h>
 # include <openssl/ossl_typ.h>
 
-
+# define RAND_DRBG_FLAG_MASTER               1 << 0
+# define RAND_DRBG_FLAG_PUBLIC               1 << 1
+# define RAND_DRBG_FLAG_PRIVATE              1 << 2
 /* In CTR mode, disable derivation function ctr_df */
-# define RAND_DRBG_FLAG_CTR_NO_DF            0x1
+# define RAND_DRBG_FLAG_CTR_NO_DF            1 << 3
+/* If using a digest type select HMAC_DRBG if this is set */
+# define RAND_DRBG_FLAG_HMAC                 1 << 4
 
-/* A logical OR of all used flag bits (currently there is only one) */
+#define RAND_DRBG_TYPE_FLAGS    ( \
+    RAND_DRBG_FLAG_MASTER | RAND_DRBG_FLAG_PUBLIC | RAND_DRBG_FLAG_PRIVATE )
+
+/* A logical OR of all used flag bits */
 # define RAND_DRBG_USED_FLAGS  ( \
-    RAND_DRBG_FLAG_CTR_NO_DF \
+    RAND_DRBG_FLAG_CTR_NO_DF | \
+    RAND_DRBG_FLAG_HMAC | \
+    RAND_DRBG_TYPE_FLAGS \
                                  )
 
 /*
  * Default security strength (in the sense of [NIST SP 800-90Ar1])
  *
  * NIST SP 800-90Ar1 supports the strength of the DRBG being smaller than that
- * of the cipher by collecting less entropy. The current DRBG implemantion does
- * not take RAND_DRBG_STRENGTH into account and sets the strength of the DRBG
- * to that of the cipher.
+ * of the cipher by collecting less entropy. The current DRBG implementation
+ * does not take RAND_DRBG_STRENGTH into account and sets the strength of the
+ * DRBG to that of the cipher.
  *
  * RAND_DRBG_STRENGTH is currently only used for the legacy RAND
  * implementation.
@@ -37,7 +46,9 @@
  * NID_aes_256_ctr
  */
 # define RAND_DRBG_STRENGTH             256
+/* Default drbg type */
 # define RAND_DRBG_TYPE                 NID_aes_256_ctr
+/* Default drbg flags */
 # define RAND_DRBG_FLAGS                0
 
 

@@ -22,10 +22,11 @@ enum drbg_kat_type {
     PR_TRUE
 };
 
-enum drbg_df {
-    USE_DF,
-    NO_DF,
-    NA
+enum drbg_flags {
+    NA       = 0,
+    USE_DF   = 1<<0,
+    NO_DF    = 1<<1,
+    USE_HMAC = 1<<2
 };
 
 struct drbg_kat_no_reseed {
@@ -64,7 +65,7 @@ struct drbg_kat_pr_true {
 
 struct drbg_kat {
     enum drbg_kat_type type;
-    enum drbg_df df;
+    enum drbg_flags flags;
     int nid;
 
     size_t entropyinlen;
@@ -76,7 +77,24 @@ struct drbg_kat {
     const void *t;
 };
 
-extern const struct drbg_kat *drbg_test[];
-extern const size_t drbg_test_nelem;
+extern const struct drbg_kat *drbg_ctr_nor_test[];
+extern const struct drbg_kat *drbg_ctr_prt_test[];
+extern const struct drbg_kat *drbg_ctr_prf_test[];
+extern const struct drbg_kat *drbg_hmac_nor_test[];
+extern const struct drbg_kat *drbg_hmac_prt_test[];
+extern const struct drbg_kat *drbg_hmac_prf_test[];
+extern const struct drbg_kat *drbg_hash_nor_test[];
+extern const struct drbg_kat *drbg_hash_prt_test[];
+extern const struct drbg_kat *drbg_hash_prf_test[];
+
+extern const size_t drbg_ctr_nor_nelem;
+extern const size_t drbg_ctr_prt_nelem;
+extern const size_t drbg_ctr_prf_nelem;
+extern const size_t drbg_hmac_nor_nelem;
+extern const size_t drbg_hmac_prt_nelem;
+extern const size_t drbg_hmac_prf_nelem;
+extern const size_t drbg_hash_nor_nelem;
+extern const size_t drbg_hash_prt_nelem;
+extern const size_t drbg_hash_prf_nelem;
 
 #endif

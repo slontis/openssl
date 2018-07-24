@@ -71,8 +71,10 @@ static int single_kat_no_reseed(const struct drbg_kat *td)
     int failures = 0;
     TEST_CTX t;
 
-    if (td->df != USE_DF)
+    if ((td->flags & USE_DF) == 0)
         flags |= RAND_DRBG_FLAG_CTR_NO_DF;
+    if ((td->flags & USE_HMAC) != 0)
+        flags |= RAND_DRBG_FLAG_HMAC;
 
     if (!TEST_ptr(drbg = RAND_DRBG_new(td->nid, flags, NULL)))
         return 0;
@@ -133,8 +135,10 @@ static int single_kat_pr_false(const struct drbg_kat *td)
     int failures = 0;
     TEST_CTX t;
 
-    if (td->df != USE_DF)
+    if ((td->flags & USE_DF) == 0)
         flags |= RAND_DRBG_FLAG_CTR_NO_DF;
+    if ((td->flags & USE_HMAC) != 0)
+        flags |= RAND_DRBG_FLAG_HMAC;
 
     if (!TEST_ptr(drbg = RAND_DRBG_new(td->nid, flags, NULL)))
         return 0;
@@ -200,8 +204,10 @@ static int single_kat_pr_true(const struct drbg_kat *td)
     int failures = 0;
     TEST_CTX t;
 
-    if (td->df != USE_DF)
+    if ((td->flags & USE_DF) == 0)
         flags |= RAND_DRBG_FLAG_CTR_NO_DF;
+    if ((td->flags & USE_HMAC) != 0)
+        flags |= RAND_DRBG_FLAG_HMAC;
 
     if (!TEST_ptr(drbg = RAND_DRBG_new(td->nid, flags, NULL)))
         return 0;
@@ -252,9 +258,9 @@ err:
     return failures == 0;
 }
 
-static int test_cavs_kats(int i)
+static int test_cavs_kats(const struct drbg_kat *test[], int i)
 {
-    const struct drbg_kat *td = drbg_test[i];
+    const struct drbg_kat *td = test[i];
     int rv = 0;
 
     switch (td->type) {
@@ -278,10 +284,68 @@ err:
     return rv;
 }
 
+
+static int test_cavs_ctr_noreseed(int i) {
+    return test_cavs_kats(drbg_ctr_nor_test, i);
+}
+static int test_cavs_ctr_pr_true(int i) {
+    return test_cavs_kats(drbg_ctr_prt_test, i);
+}
+static int test_cavs_ctr_pr_false(int i) {
+    return test_cavs_kats(drbg_ctr_prf_test, i);
+}
+
+static int test_cavs_hmac_noreseed(int i) {
+    return test_cavs_kats(drbg_hmac_nor_test, i);
+}
+static int test_cavs_hmac_pr_true(int i) {
+    return test_cavs_kats(drbg_hmac_prt_test, i);
+}
+static int test_cavs_hmac_pr_false(int i) {
+    return test_cavs_kats(drbg_hmac_prf_test, i);
+}
+
+static int test_cavs_hash_noreseed(int i) {
+    return test_cavs_kats(drbg_hash_nor_test, i);
+}
+static int test_cavs_hash_pr_true(int i) {
+    return test_cavs_kats(drbg_hash_prt_test, i);
+}
+static int test_cavs_hash_pr_false(int i) {
+    return test_cavs_kats(drbg_hash_prf_test, i);
+}
+
+extern const struct drbg_kat *drbg_ctr_prt_test[];
+extern const struct drbg_kat *drbg_ctr_prf_test[];
+extern const struct drbg_kat *drbg_hmac_nor_test[];
+extern const struct drbg_kat *drbg_hmac_prt_test[];
+extern const struct drbg_kat *drbg_hmac_prf_test[];
+extern const struct drbg_kat *drbg_hash_nor_test[];
+extern const struct drbg_kat *drbg_hash_prt_test[];
+extern const struct drbg_kat *drbg_hash_prf_test[];
+
+extern const size_t drbg_ctr_nor_test_nelem;
+extern const size_t drbg_ctr_prt_test_nelem;
+extern const size_t drbg_ctr_prf_test_nelem;
+extern const size_t drbg_hmac_nor_test_nelem;
+extern const size_t drbg_hmac_prt_test_nelem;
+extern const size_t drbg_hmac_prf_test_nelem;
+extern const size_t drbg_hash_nor_test_nelem;
+extern const size_t drbg_hash_prt_test_nelem;
+extern const size_t drbg_hash_prf_test_nelem;
+
 int setup_tests(void)
 {
     app_data_index = RAND_DRBG_get_ex_new_index(0L, NULL, NULL, NULL, NULL);
 
-    ADD_ALL_TESTS(test_cavs_kats, drbg_test_nelem);
+    ADD_ALL_TESTS(test_cavs_ctr_noreseed,  drbg_ctr_nor_nelem);
+    ADD_ALL_TESTS(test_cavs_ctr_pr_false,  drbg_ctr_prf_nelem);
+    ADD_ALL_TESTS(test_cavs_ctr_pr_true,   drbg_ctr_prt_nelem);
+    ADD_ALL_TESTS(test_cavs_hmac_noreseed, drbg_hmac_nor_nelem);
+    ADD_ALL_TESTS(test_cavs_hmac_pr_true,  drbg_hmac_prt_nelem);
+    ADD_ALL_TESTS(test_cavs_hmac_pr_false, drbg_hmac_prf_nelem);
+    ADD_ALL_TESTS(test_cavs_hash_noreseed, drbg_hash_nor_nelem);
+    ADD_ALL_TESTS(test_cavs_hash_pr_true,  drbg_hash_prt_nelem);
+    ADD_ALL_TESTS(test_cavs_hash_pr_false, drbg_hash_prf_nelem);
     return 1;
 }

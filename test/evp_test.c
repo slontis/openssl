@@ -2657,6 +2657,9 @@ static int run_file_tests(int i)
     return c == 0;
 }
 
+extern int FIPS_self_test(void);
+
+
 int setup_tests(void)
 {
     size_t n = test_get_argument_count();
@@ -2665,6 +2668,8 @@ int setup_tests(void)
         TEST_error("Usage: %s file...", test_get_program_name());
         return 0;
     }
+
+    FIPS_self_test();
 
     ADD_ALL_TESTS(run_file_tests, n);
     return 1;

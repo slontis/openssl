@@ -10,18 +10,18 @@
 #include "self_test_data.c"
 
 
+/* Utility function to convert binary data to a BIGNUM */
+static BIGNUM *TOBN(ITEM item)
+{
+    return BN_bin2bn(item.data, item.len, NULL);
+}
 
 static int test_kat(const unsigned char *data, int data_len, ITEM kat)
 {
     return (data_len == kat.len && memcmp(data, kat.data, data_len) == 0);
 }
 
-
-static BIGNUM *TOBN(ITEM item)
-{
-    return BN_bin2bn(item.data, item.len, NULL);
-}
-
+/* Load a EVP_PKEY from binary data */
 static EVP_PKEY *pkey_from_binary(int nid, ITEM *key)
 {
     EVP_PKEY *pkey = EVP_PKEY_new();
@@ -87,42 +87,51 @@ err:
 
 /*
  * Helper function to setup a EVP_CipherInit
- * For an Authenticated cipher the init is quite complex.
+ * Used to hide the complexity of Authenticated ciphers.
  */
 static int cipher_init(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher,
                        ST_CIPHER *t, int do_encrypt)
 {
+    int pad = ((t->flags & ST_FLAG_PAD) != 0) ? 1 : 0;
+
     /* Flag required for Key wrapping */
     EVP_CIPHER_CTX_set_flags(ctx, EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
     if (t->tag.data == NULL) {
         /* Use a normal cipher init */
         return EVP_CipherInit_ex(ctx, cipher, NULL, t->key.data, t->iv.data,
                                  do_encrypt)
-               && EVP_CIPHER_CTX_set_padding(ctx, t->pad);
+               && EVP_CIPHER_CTX_set_padding(ctx, pad);
     } else {
         /* The authenticated cipher init */
         unsigned char *in_tag = NULL;
-        int in_len, tmp;
+        int in_len = 0, in_tag_len = 0;
+        int tmp;
+        int is_ccm = ((t->flags & ST_FLAG_CCM) != 0);
 
         if (do_encrypt) {
-            in_len = t->pt.len;
+            if (is_ccm) {
+                in_len = t->pt.len;
+                in_tag_len = 1;
+            }
         } else {
-            in_len = t->ct_ka.len;
+            if (is_ccm)
+                in_len = t->ct_ka.len;
             in_tag = (unsigned char *)t->tag.data;
         }
         return EVP_CipherInit_ex(ctx, cipher, NULL, NULL, NULL, do_encrypt)
                && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, t->iv.len,
                                       NULL)
-               && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, t->tag.len,
-                                      in_tag)
+               && ((in_tag == NULL && in_tag_len == 0)
+                       || EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
+                                              t->tag.len, in_tag))
                && EVP_CipherInit_ex(ctx, NULL, NULL, t->key.data, t->iv.data,
                                     do_encrypt)
-               && EVP_CIPHER_CTX_set_padding(ctx, t->pad)
-               && EVP_CipherUpdate(ctx, NULL, &tmp, NULL, in_len)
+               && EVP_CIPHER_CTX_set_padding(ctx, pad)
+               && (in_len == 0
+                       || EVP_CipherUpdate(ctx, NULL, &tmp, NULL, in_len))
                && EVP_CipherUpdate(ctx, NULL, &tmp, t->add.data, t->add.len);
     }
 }
-
 
 static int self_test_cipher(ST_CIPHER *t)
 {
@@ -158,9 +167,12 @@ static int self_test_cipher(ST_CIPHER *t)
             goto err;
     }
 
+#ifdef SELF_TEST_CALLBACK
     /* Optional corruption */
-    if (0)
+    if (self_test_is_corrupt_cb
+            && self_test_is_corrupt_cb(ST_TYPE_CIPHER, t->nid))
         ct_buf[0] ^= 1;
+#endif
 
     if (!cipher_init(ctx, cipher, t, !encrypt)
             || !EVP_CipherUpdate(ctx, pt_buf, &len, ct_buf, ct_len)
@@ -176,7 +188,6 @@ err:
     EVP_CIPHER_CTX_free(ctx);
     return ret;
 }
-
 
 static int self_test_digest(ST_DIGEST *t)
 {
@@ -195,9 +206,11 @@ static int self_test_digest(ST_DIGEST *t)
             || !EVP_DigestFinal_ex(ctx, out, &out_len))
         goto err;
 
+#ifdef SELF_TEST_CALLBACK
     /* Optional corruption */
-    if (0)
+    if (self_test_is_corrupt_cb(ST_TYPE_DIGEST, t->nid))
         out[0] ^= 1;
+#endif
 
     if (!test_kat(out, (int)out_len, t->digest_ka))
         goto err;
@@ -229,9 +242,11 @@ static int self_test_signature(ST_SIGNATURE *t)
             || (t->sig_ka.data != NULL && !test_kat(out, out_len, t->sig_ka)))
         goto err;
 
+#ifdef SELF_TEST_CALLBACK
     /* Optional corruption */
-    if (0)
+    if (self_test_is_corrupt_cb(ST_TYPE_SIGNATURE, t->nid))
         out[0] ^= 1;
+#endif
 
     if (!EVP_DigestVerifyInit(ctx, NULL, md, NULL, pkey)
             || !EVP_DigestVerifyUpdate(ctx, t->msg.data, t->msg.len)
@@ -283,12 +298,13 @@ static int self_test_DRBG(ST_DRBG *t)
             || !RAND_DRBG_set_ex_data(drbg, drbg_data_index, t)
             || !RAND_DRBG_set_callbacks(drbg, drbg_entropy_cb, NULL, NULL, NULL)
             || !RAND_DRBG_instantiate(drbg, t->pers_str.data, t->pers_str.len)
-            || !RAND_DRBG_generate(drbg, out, t->gen_ka.len,
-                                   !predict_resist,
+            || !RAND_DRBG_generate(drbg, out, t->gen_ka.len,!predict_resist,
                                    t->gen_addin.data, t->gen_addin.len)
             || !test_kat(out, t->gen_ka.len, t->gen_ka)
             || !RAND_DRBG_reseed(drbg, t->reseed_addin.data, t->reseed_addin.len,
                                  predict_resist)
+            || !RAND_DRBG_generate(drbg, out, t->reseed_ka.len, !predict_resist,
+                                   t->reseed_addin.data, t->reseed_addin.len)
             || !test_kat(out, t->reseed_ka.len, t->reseed_ka)
             || !RAND_DRBG_uninstantiate(drbg))
         goto err;
@@ -308,13 +324,13 @@ int FIPS_self_test(void)
     int ret = 0;
     unsigned int i;
 
-    for (i = 0; i < OSSL_NELEM(signature_tests); ++i) {
-        if (!self_test_signature(&signature_tests[i]))
+    for (i = 0; i < OSSL_NELEM(digest_tests); ++i) {
+        if (!self_test_digest(&digest_tests[i]))
             goto err;
     }
 
-    for (i = 0; i < OSSL_NELEM(digest_tests); ++i) {
-        if (!self_test_digest(&digest_tests[i]))
+    for (i = 0; i < OSSL_NELEM(signature_tests); ++i) {
+        if (!self_test_signature(&signature_tests[i]))
             goto err;
     }
 

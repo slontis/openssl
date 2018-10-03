@@ -2669,7 +2669,8 @@ int setup_tests(void)
         return 0;
     }
 
-    FIPS_self_test();
+    if (!FIPS_self_test())
+        return 0;
 
     ADD_ALL_TESTS(run_file_tests, n);
     return 1;

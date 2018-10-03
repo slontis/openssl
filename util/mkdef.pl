@@ -167,12 +167,13 @@ foreach (@ARGV, split(/ /, $config{options}))
 	$debug=1 if $_ eq "debug";
 	$trace=1 if $_ eq "trace";
 	$verbose=1 if $_ eq "verbose";
-	$W32=1 if $_ eq "32";
 	die "win16 not supported" if $_ eq "16";
-	if($_ eq "NT") {
+	if ($_ eq "32" || $_ eq "mingw") {
+		$W32=1;
+	} elsif ($_ eq "NT") {
 		$W32 = 1;
 		$NT = 1;
-	} elsif ($_ eq "linux") {
+	} elsif ($_ eq "linux" || $_ eq "solaris") {
 		$linux=1;
 		$UNIX=1;
 	} elsif ($_ eq "aix") {
@@ -935,16 +936,6 @@ sub do_defs
 			print STDERR "DEBUG: \$s = $s; \$p = ",$platform{$s},"; \$a = ",$algorithm{$s},"; \$kind = ",$kind{$s},"\n" if $debug;
 		}
 	}
-
-	# Prune the returned symbols
-
-        delete $syms{"bn_dump1"};
-	$platform{"BIO_s_log"} .= ",!WIN32,!macintosh";
-
-	$platform{"PEM_read_NS_CERT_SEQ"} = "VMS";
-	$platform{"PEM_write_NS_CERT_SEQ"} = "VMS";
-	$platform{"PEM_read_P8_PRIV_KEY_INFO"} = "VMS";
-	$platform{"PEM_write_P8_PRIV_KEY_INFO"} = "VMS";
 
 	# Info we know about
 

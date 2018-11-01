@@ -336,7 +336,7 @@ int OPENSSL_isservice(void);
 
 int FIPS_mode(void);
 int FIPS_mode_set(int r);
-int FIPS_self_test(void);
+int FIPS_self_test(int f);
 
 void OPENSSL_init(void);
 # ifdef OPENSSL_SYS_UNIX

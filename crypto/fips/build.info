@@ -1,4 +1,4 @@
 LIBS=../../libcrypto
 SOURCE[../../libcrypto]=\
-        self_test.c
+        self_test.c self_test_integrity.c self_test_runonce.c self_test_cb.c
 

@@ -145,6 +145,90 @@ void AES_xts_decrypt(const unsigned char *inp, unsigned char *out, size_t len,
                      const unsigned char iv[16]);
 #endif
 
+
+#define AES_GCM_INIT_IV(gctx, iv, setiv_func) \
+    if (iv != NULL) {\
+        if (gctx->key_set)\
+            setiv_func;\
+        else\
+            memcpy(gctx->iv, iv, gctx->ivlen);\
+        gctx->iv_set = 1;\
+        gctx->iv_gen = 0;\
+    } else if (gctx->key_set && gctx->iv_set) {\
+        iv = gctx->iv;\
+        if (iv != NULL) {\
+            setiv_func;\
+            gctx->iv_set = 1;\
+        }\
+    }
+
+#define AES_GCM_IV_GENERATE(gctx, offset) \
+    if (!gctx->iv_set) {\
+        int sz = gctx->ivlen - offset;\
+        if (sz <= 0)\
+            return -1;\
+        /* Must be at least 96 bits */\
+        if (gctx->ivlen < 12)\
+            return -1;\
+        /* Use DRBG to generate random iv */ \
+        if (RAND_bytes(gctx->iv + offset, gctx->ivlen - offset) <= 0)\
+            return -1;\
+        gctx->iv_set = 1;\
+    }
+
+static void aes_gcm_init_iv(EVP_AES_GCM_CTX *gctx, const unsigned char *iv)
+{
+    AES_GCM_INIT_IV(gctx, iv, CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen));
+}
+
+static int aes_gcm_iv_generate(EVP_AES_GCM_CTX *gctx, int offset)
+{
+    AES_GCM_IV_GENERATE(gctx, offset);
+    return 1;
+}
+
+#if 0
+static void aes_gcm_init_iv(EVP_AES_GCM_CTX *gctx, const unsigned char *iv)
+{
+    if (gctx->key_set) {
+        /*
+         * If we have an iv can set it directly, otherwise use saved IV.
+         */
+        if (iv == NULL && gctx->iv_set)
+            iv = gctx->iv;
+        if (iv != NULL) {
+            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
+            gctx->iv_set = 1;
+        }
+    } else {
+        /* If key set use IV, otherwise copy */
+        if (gctx->key_set)
+            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
+        else
+            memcpy(gctx->iv, iv, gctx->ivlen);
+        gctx->iv_set = 1;
+        gctx->iv_gen = 0;
+    }
+}
+
+static int aes_gcm_iv_generate(EVP_AES_GCM_CTX *gctx, int offset)
+{
+    if (!gctx->iv_set) {
+        int sz = gctx->ivlen - offset;
+        if (sz <= 0)
+            return 0;
+        /* Must be at least 96 bits */
+        if (gctx->ivlen < 12)
+            return 0;
+        /* Use DRBG to generate random iv */
+        if (RAND_bytes(gctx->iv + offset, gctx->ivlen - offset) <= 0)
+            return 0;
+        gctx->iv_set = 1;
+    }
+    return 1;
+}
+#endif
+
 /* increment counter (64-bit int) by 1 */
 static void ctr64_inc(unsigned char *counter)
 {
@@ -354,25 +438,9 @@ static int aesni_gcm_init_key(EVP_CIPHER_CTX *ctx, const unsigned char *key,
                               &gctx->ks.ks);
         CRYPTO_gcm128_init(&gctx->gcm, &gctx->ks, (block128_f) aesni_encrypt);
         gctx->ctr = (ctr128_f) aesni_ctr32_encrypt_blocks;
-        /*
-         * If we have an iv can set it directly, otherwise use saved IV.
-         */
-        if (iv == NULL && gctx->iv_set)
-            iv = gctx->iv;
-        if (iv) {
-            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
-            gctx->iv_set = 1;
-        }
         gctx->key_set = 1;
-    } else {
-        /* If key set use IV, otherwise copy */
-        if (gctx->key_set)
-            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
-        else
-            memcpy(gctx->iv, iv, gctx->ivlen);
-        gctx->iv_set = 1;
-        gctx->iv_gen = 0;
     }
+    aes_gcm_init_iv(gctx, iv);
     return 1;
 }
 
@@ -734,6 +802,7 @@ static int aes_t4_cfb1_cipher(EVP_CIPHER_CTX *ctx, unsigned char *out,
 static int aes_t4_ctr_cipher(EVP_CIPHER_CTX *ctx, unsigned char *out,
                              const unsigned char *in, size_t len);
 
+
 static int aes_t4_gcm_init_key(EVP_CIPHER_CTX *ctx, const unsigned char *key,
                                const unsigned char *iv, int enc)
 {
@@ -758,25 +827,10 @@ static int aes_t4_gcm_init_key(EVP_CIPHER_CTX *ctx, const unsigned char *key,
         default:
             return 0;
         }
-        /*
-         * If we have an iv can set it directly, otherwise use saved IV.
-         */
-        if (iv == NULL && gctx->iv_set)
-            iv = gctx->iv;
-        if (iv) {
-            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
-            gctx->iv_set = 1;
-        }
         gctx->key_set = 1;
-    } else {
-        /* If key set use IV, otherwise copy */
-        if (gctx->key_set)
-            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
-        else
-            memcpy(gctx->iv, iv, gctx->ivlen);
-        gctx->iv_set = 1;
-        gctx->iv_gen = 0;
     }
+    aes_gcm_init_iv(gctx, iv);
+
     return 1;
 }
 
@@ -1758,7 +1812,7 @@ static int s390x_aes_gcm_init_key(EVP_CIPHER_CTX *ctx,
         gctx->fc = S390X_AES_FC(keylen);
         if (!enc)
             gctx->fc |= S390X_DECRYPT;
-
+#if 0
         if (iv == NULL && gctx->iv_set)
             iv = gctx->iv;
 
@@ -1766,8 +1820,12 @@ static int s390x_aes_gcm_init_key(EVP_CIPHER_CTX *ctx,
             s390x_aes_gcm_setiv(gctx, iv);
             gctx->iv_set = 1;
         }
+#endif
         gctx->key_set = 1;
-    } else {
+    }
+    AES_GCM_INIT_IV(gctx, iv, s390x_aes_gcm_setiv(gctx, iv));
+#if 0
+    else {
         if (gctx->key_set)
             s390x_aes_gcm_setiv(gctx, iv);
         else
@@ -1776,6 +1834,7 @@ static int s390x_aes_gcm_init_key(EVP_CIPHER_CTX *ctx,
         gctx->iv_set = 1;
         gctx->iv_gen = 0;
     }
+#endif
     return 1;
 }
 
@@ -1855,8 +1914,13 @@ static int s390x_aes_gcm_cipher(EVP_CIPHER_CTX *ctx, unsigned char *out,
     if (gctx->tls_aad_len >= 0)
         return s390x_aes_gcm_tls_cipher(ctx, out, in, len);
 
-    if (!gctx->iv_set)
-        return -1;
+    if (!gctx->iv_set) {
+        if (ctx->encrypt) {
+            AES_GCM_IV_GENERATE(gctx, 0);
+        } else {
+            return -1;
+        }
+    }
 
     if (in != NULL) {
         if (out == NULL) {
@@ -3012,25 +3076,10 @@ static int aes_gcm_init_key(EVP_CIPHER_CTX *ctx, const unsigned char *key,
 #endif
         } while (0);
 
-        /*
-         * If we have an iv can set it directly, otherwise use saved IV.
-         */
-        if (iv == NULL && gctx->iv_set)
-            iv = gctx->iv;
-        if (iv) {
-            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
-            gctx->iv_set = 1;
-        }
         gctx->key_set = 1;
-    } else {
-        /* If key set use IV, otherwise copy */
-        if (gctx->key_set)
-            CRYPTO_gcm128_setiv(&gctx->gcm, iv, gctx->ivlen);
-        else
-            memcpy(gctx->iv, iv, gctx->ivlen);
-        gctx->iv_set = 1;
-        gctx->iv_gen = 0;
     }
+    aes_gcm_init_iv(gctx, iv);
+
     return 1;
 }
 
@@ -3182,8 +3231,14 @@ static int aes_gcm_cipher(EVP_CIPHER_CTX *ctx, unsigned char *out,
     if (gctx->tls_aad_len >= 0)
         return aes_gcm_tls_cipher(ctx, out, in, len);
 
-    if (!gctx->iv_set)
-        return -1;
+    if (!gctx->iv_set) {
+        if (ctx->encrypt) {
+            if (!aes_gcm_iv_generate(gctx, 0))
+                return -1;
+        } else {
+            return -1;
+        }
+    }
     if (in) {
         if (out == NULL) {
             if (CRYPTO_gcm128_aad(&gctx->gcm, in, len))

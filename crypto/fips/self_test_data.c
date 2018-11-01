@@ -1,14 +1,7 @@
 
-#define ST_TYPE_CIPHER    1
-#define ST_TYPE_DIGEST    2
-#define ST_TYPE_SIGNATURE 3
-
-typedef int (SELF_TEST_CORRUPT(int type, int nid));
+typedef int (SELF_TEST_CORRUPT(const char *type, const char *desc));
 
 
-#define ST_FLAG_NOPAD 0
-#define ST_FLAG_PAD   1
-#define ST_FLAG_CCM   2
 
 /* RSA Key data indicies */
 #define RSA_N    0
@@ -32,53 +25,6 @@ typedef int (SELF_TEST_CORRUPT(int type, int nid));
 #define EC_D     1
 #define EC_X     2
 #define EC_Y     3
-
-/* Binary data */
-typedef struct item_st {
-    const unsigned char *data;
-    int len;
-} ITEM;
-
-/* Self test data for a cipher - last fields required for authenticated modes */
-typedef struct st_cipher_st {
-    int nid;
-    int flags;
-    ITEM pt;
-    ITEM ct_ka;
-    ITEM key;
-    ITEM iv;
-    ITEM add;
-    ITEM tag;
-} ST_CIPHER;
-
-/* Self test data for a digest */
-typedef struct st_digest_st {
-    int nid;
-    ITEM pt;
-    ITEM digest_ka;
-} ST_DIGEST;
-
-/* Self test data for a signature */
-typedef struct st_sig_st {
-    int key_nid;
-    int digest_nid;
-    ITEM *key;
-    ITEM msg;
-    ITEM sig_ka;
-} ST_SIGNATURE;
-
-/* Self test data for a DRBG */
-typedef struct st_drbg_st {
-    int nid;
-    int flags;
-    ITEM init_entropy;
-    ITEM pers_str;
-    ITEM gen_addin;
-    ITEM gen_ka;
-    ITEM reseed_entropy;
-    ITEM reseed_addin;
-    ITEM reseed_ka;
-} ST_DRBG;
 
 
 /* Macros to build Self test data */
@@ -104,11 +50,11 @@ typedef struct st_drbg_st {
 
 #define DIGEST_DATA(type) { NID_##type, ITM(type##_pt), ITM(type##_digest) }
 
-#define DRBG_DATA(type, name, flags) { NID_##type, flags, \
-    ITM(name##_init_entropy), ITM(name##_pers_str), ITM(name##_addin), \
-    ITM(name##_gen_kat), \
-    ITM(name##_reseed_addin), ITM(name##_reseed_entropy), \
-    ITM(name##_reseed_kat) \
+#define DRBG_DATA(desc, type, fname, flags) { desc, NID_##type, flags, \
+    ITM(fname##_init_entropy), ITM(fname##_pers_str), ITM(fname##_addin), \
+    ITM(fname##_gen_kat), \
+    ITM(fname##_reseed_addin), ITM(fname##_reseed_entropy), \
+    ITM(fname##_reseed_kat) \
 }
 
 /* Cipher test data */
@@ -333,7 +279,7 @@ static const unsigned char dsa_2048_priv_key[] = {
     0xec, 0x55, 0xf6, 0xcc
 };
 
-static ITEM key_dsa_2048[] = {
+static ST_ITEM key_dsa_2048[] = {
     ITM(dsa_2048_p),
     ITM(dsa_2048_q),
     ITM(dsa_2048_g),
@@ -359,7 +305,7 @@ static const unsigned char ecd_y[] = {
 };
 static const unsigned char ecd_curve[] = SN_secp224r1;
 
-static ITEM key_ecdsa_p224[] = {
+static ST_ITEM key_ecdsa_p224[] = {
     ITM_STR(ecd_curve),
     ITM(ecd_d),
     ITM(ecd_x),
@@ -485,7 +431,7 @@ static const unsigned char rsa_2048_iqmp[] = {
     0xF8, 0xF3, 0x95, 0xFE, 0x31, 0x25, 0x50, 0x12
 };
 
-static ITEM key_rsa_2048[] = {
+static ST_ITEM key_rsa_2048[] = {
     ITM(rsa_2048_n),
     ITM(rsa_2048_e),
     ITM(rsa_2048_d),
@@ -573,11 +519,11 @@ static unsigned char drbg_aes_128_ctr_reseed_kat[] = {
  * Test lists
  */
 ST_CIPHER cipher_tests[] = {
-    CIPHER_DATA_STR(aes_128_cbc, ST_FLAG_NOPAD),
-    CIPHER_DATA(des_ede3_cbc, ST_FLAG_NOPAD),
+//    CIPHER_DATA_STR(aes_128_cbc, ST_FLAG_NOPAD),
+//    CIPHER_DATA(des_ede3_cbc, ST_FLAG_NOPAD),
     CIPHER_AEAD_DATA(aes_256_gcm, ST_FLAG_NOPAD),
-    CIPHER_AEAD_DATA(aes_128_ccm, ST_FLAG_CCM | ST_FLAG_NOPAD),
-    CIPHER_KW_DATA(aes128_wrap, ST_FLAG_NOPAD)
+//    CIPHER_AEAD_DATA(aes_128_ccm, ST_FLAG_CCM | ST_FLAG_NOPAD),
+//    CIPHER_KW_DATA(aes128_wrap, ST_FLAG_NOPAD)
 };
 
 ST_DIGEST digest_tests[] = {
@@ -591,11 +537,11 @@ static ST_SIGNATURE signature_tests[] = {
      * DSA can only use a KAT if the entropy is hardwired to produce a
      * known value for k
      */
-    { NID_dsa, NID_sha512, key_dsa_2048, ITM_STR(dsa_msg) },
-    { NID_ecdsa_with_Specified, NID_sha256, key_ecdsa_p224, ITM_STR(dsa_msg) },
-    { NID_rsa, NID_sha256, key_rsa_2048, ITM_STR(rsa_msg), ITM(rsa_sig) }
+    { "dsa_2040_sha512", NID_dsa, NID_sha512, key_dsa_2048, ITM_STR(dsa_msg) },
+    { "ecdsa_p224_sha256", NID_ecdsa_with_Specified, NID_sha256, key_ecdsa_p224, ITM_STR(dsa_msg) },
+    { "rsa_2048_sha256", NID_rsa, NID_sha256, key_rsa_2048, ITM_STR(rsa_msg), ITM(rsa_sig) }
 };
 
 static ST_DRBG drbg_tests[] = {
-    DRBG_DATA(aes_128_ctr, drbg_aes_128_ctr, 0)
+    DRBG_DATA("AES_128_CTR", aes_128_ctr, drbg_aes_128_ctr, 0)
 };

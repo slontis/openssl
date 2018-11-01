@@ -2657,7 +2657,7 @@ static int run_file_tests(int i)
     return c == 0;
 }
 
-extern int FIPS_self_test(void);
+extern int FIPS_self_test(int);
 
 
 int setup_tests(void)
@@ -2669,7 +2669,7 @@ int setup_tests(void)
         return 0;
     }
 
-    if (!FIPS_self_test())
+    if (!FIPS_self_test(1))
         return 0;
 
     ADD_ALL_TESTS(run_file_tests, n);

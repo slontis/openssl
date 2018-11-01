@@ -10,6 +10,8 @@
 #ifndef HEADER_ENVELOPE_H
 # define HEADER_ENVELOPE_H
 
+# include <stdarg.h>
+
 # include <openssl/opensslconf.h>
 # include <openssl/ossl_typ.h>
 # include <openssl/symhacks.h>
@@ -983,6 +985,47 @@ void EVP_MD_do_all_sorted(void (*fn)
                            (const EVP_MD *ciph, const char *from,
                             const char *to, void *x), void *arg);
 
+/* MAC stuff */
+
+# define EVP_MAC_CMAC           NID_cmac
+# define EVP_MAC_HMAC           NID_hmac
+# define EVP_MAC_SIPHASH        NID_siphash
+
+EVP_MAC_CTX *EVP_MAC_CTX_new(const EVP_MAC *mac);
+EVP_MAC_CTX *EVP_MAC_CTX_new_id(int nid);
+void EVP_MAC_CTX_free(EVP_MAC_CTX *ctx);
+int EVP_MAC_CTX_copy(EVP_MAC_CTX *dest, EVP_MAC_CTX *src);
+const EVP_MAC *EVP_MAC_CTX_mac(EVP_MAC_CTX *ctx);
+size_t EVP_MAC_size(EVP_MAC_CTX *ctx);
+int EVP_MAC_init(EVP_MAC_CTX *ctx);
+int EVP_MAC_update(EVP_MAC_CTX *ctx, const unsigned char *data, size_t datalen);
+int EVP_MAC_final(EVP_MAC_CTX *ctx, unsigned char *out, size_t *poutlen);
+int EVP_MAC_ctrl(EVP_MAC_CTX *ctx, int cmd, ...);
+int EVP_MAC_vctrl(EVP_MAC_CTX *ctx, int cmd, va_list args);
+int EVP_MAC_ctrl_str(EVP_MAC_CTX *ctx, const char *type, const char *value);
+int EVP_MAC_str2ctrl(EVP_MAC_CTX *ctx, int cmd, const char *value);
+int EVP_MAC_hex2ctrl(EVP_MAC_CTX *ctx, int cmd, const char *value);
+int EVP_MAC_nid(const EVP_MAC *mac);
+
+# define EVP_get_macbynid(a)    EVP_get_macbyname(OBJ_nid2sn(a))
+# define EVP_get_macbyobj(a)    EVP_get_macbynid(OBJ_obj2nid(a))
+# define EVP_MAC_name(o)        OBJ_nid2sn(EVP_MAC_nid(o))
+const EVP_MAC *EVP_get_macbyname(const char *name);
+void EVP_MAC_do_all(void (*fn)
+                    (const EVP_MAC *ciph, const char *from, const char *to,
+                     void *x), void *arg);
+void EVP_MAC_do_all_sorted(void (*fn)
+                           (const EVP_MAC *ciph, const char *from,
+                            const char *to, void *x), void *arg);
+
+# define EVP_MAC_CTRL_SET_KEY           0x01 /* unsigned char *, size_t */
+# define EVP_MAC_CTRL_SET_FLAGS         0x02 /* unsigned long */
+# define EVP_MAC_CTRL_SET_ENGINE        0x03 /* ENGINE * */
+# define EVP_MAC_CTRL_SET_MD            0x04 /* EVP_MD * */
+# define EVP_MAC_CTRL_SET_CIPHER        0x04 /* EVP_CIPHER * */
+# define EVP_MAC_CTRL_SET_SIZE          0x05 /* size_t */
+
+/* PKEY stuff */
 int EVP_PKEY_decrypt_old(unsigned char *dec_key,
                          const unsigned char *enc_key, int enc_key_len,
                          EVP_PKEY *private_key);
@@ -1631,6 +1674,14 @@ void EVP_PKEY_meth_get_digest_custom(EVP_PKEY_METHOD *pmeth,
                                                              EVP_MD_CTX *mctx));
 void EVP_add_alg_module(void);
 
+/*
+ * Convenient helper functions to transfer string based controls.
+ * The callback gets called with the parsed value.
+ */
+int EVP_str2ctrl(int (*cb)(void *ctx, int cmd, void *buf, size_t buflen),
+                 void *ctx, int cmd, const char *value);
+int EVP_hex2ctrl(int (*cb)(void *ctx, int cmd, void *buf, size_t buflen),
+                 void *ctx, int cmd, const char *hex);
 
 # ifdef  __cplusplus
 }

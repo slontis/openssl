@@ -146,17 +146,13 @@ size_t rand_drbg_get_entropy(RAND_DRBG *drbg,
         return 0;
     }
 
-    pool = rand_pool_new(entropy, min_len, max_len);
-    if (pool == NULL)
-        return 0;
-
-    if (drbg->pool) {
-        rand_pool_add(pool,
-                      rand_pool_buffer(drbg->pool),
-                      rand_pool_length(drbg->pool),
-                      rand_pool_entropy(drbg->pool));
-        rand_pool_free(drbg->pool);
-        drbg->pool = NULL;
+    if (drbg->pool != NULL) {
+        pool = drbg->pool;
+        pool->entropy_requested = entropy;
+    } else {
+        pool = rand_pool_new(entropy, min_len, max_len);
+        if (pool == NULL)
+            return 0;
     }
 
     if (drbg->parent) {
@@ -178,6 +174,8 @@ size_t rand_drbg_get_entropy(RAND_DRBG *drbg,
                                    prediction_resistance,
                                    NULL, 0) != 0)
                 bytes = bytes_needed;
+            drbg->reseed_next_counter
+                = tsan_load(&drbg->parent->reseed_prop_counter);
             rand_drbg_unlock(drbg->parent);
 
             rand_pool_add_end(pool, bytes, 8 * bytes);
@@ -206,7 +204,8 @@ size_t rand_drbg_get_entropy(RAND_DRBG *drbg,
     }
 
  err:
-    rand_pool_free(pool);
+    if (drbg->pool == NULL)
+        rand_pool_free(pool);
     return ret;
 }
 
@@ -217,7 +216,8 @@ size_t rand_drbg_get_entropy(RAND_DRBG *drbg,
 void rand_drbg_cleanup_entropy(RAND_DRBG *drbg,
                                unsigned char *out, size_t outlen)
 {
-    OPENSSL_secure_clear_free(out, outlen);
+    if (drbg->pool == NULL)
+        OPENSSL_secure_clear_free(out, outlen);
 }
 
 
@@ -279,14 +279,9 @@ void rand_drbg_cleanup_nonce(RAND_DRBG *drbg,
  * On success it allocates a buffer at |*pout| and returns the length of
  * the data. The buffer should get freed using OPENSSL_secure_clear_free().
  */
-size_t rand_drbg_get_additional_data(unsigned char **pout, size_t max_len)
+size_t rand_drbg_get_additional_data(RAND_POOL *pool, unsigned char **pout)
 {
     size_t ret = 0;
-    RAND_POOL *pool;
-
-    pool = rand_pool_new(0, 0, max_len);
-    if (pool == NULL)
-        return 0;
 
     if (rand_pool_add_additional_data(pool) == 0)
         goto err;
@@ -295,14 +290,12 @@ size_t rand_drbg_get_additional_data(unsigned char **pout, size_t max_len)
     *pout = rand_pool_detach(pool);
 
  err:
-    rand_pool_free(pool);
-
     return ret;
 }
 
-void rand_drbg_cleanup_additional_data(unsigned char *out, size_t outlen)
+void rand_drbg_cleanup_additional_data(RAND_POOL *pool, unsigned char *out)
 {
-    OPENSSL_secure_clear_free(out, outlen);
+    rand_pool_reattach(pool, out);
 }
 
 void rand_fork(void)
@@ -405,7 +398,7 @@ int RAND_poll(void)
         /* fill random pool and seed the current legacy RNG */
         pool = rand_pool_new(RAND_DRBG_STRENGTH,
                              RAND_DRBG_STRENGTH / 8,
-                             DRBG_MINMAX_FACTOR * (RAND_DRBG_STRENGTH / 8));
+                             RAND_POOL_MAX_LENGTH);
         if (pool == NULL)
             return 0;
 
@@ -430,17 +423,18 @@ err:
  * Allocate memory and initialize a new random pool
  */
 
-RAND_POOL *rand_pool_new(int entropy, size_t min_len, size_t max_len)
+RAND_POOL *rand_pool_new(int entropy_requested, size_t min_len, size_t max_len)
 {
     RAND_POOL *pool = OPENSSL_zalloc(sizeof(*pool));
 
     if (pool == NULL) {
         RANDerr(RAND_F_RAND_POOL_NEW, ERR_R_MALLOC_FAILURE);
-        goto err;
+        return NULL;
     }
 
     pool->min_len = min_len;
-    pool->max_len = max_len;
+    pool->max_len = (max_len > RAND_POOL_MAX_LENGTH) ?
+        RAND_POOL_MAX_LENGTH : max_len;
 
     pool->buffer = OPENSSL_secure_zalloc(pool->max_len);
     if (pool->buffer == NULL) {
@@ -448,13 +442,45 @@ RAND_POOL *rand_pool_new(int entropy, size_t min_len, size_t max_len)
         goto err;
     }
 
-    pool->requested_entropy = entropy;
+    pool->entropy_requested = entropy_requested;
 
     return pool;
 
 err:
     OPENSSL_free(pool);
     return NULL;
+}
+
+/*
+ * Attach new random pool to the given buffer
+ *
+ * This function is intended to be used only for feeding random data
+ * provided by RAND_add() and RAND_seed() into the <master> DRBG.
+ */
+RAND_POOL *rand_pool_attach(const unsigned char *buffer, size_t len,
+                            size_t entropy)
+{
+    RAND_POOL *pool = OPENSSL_zalloc(sizeof(*pool));
+
+    if (pool == NULL) {
+        RANDerr(RAND_F_RAND_POOL_ATTACH, ERR_R_MALLOC_FAILURE);
+        return NULL;
+    }
+
+    /*
+     * The const needs to be cast away, but attached buffers will not be
+     * modified (in contrary to allocated buffers which are zeroed and
+     * freed in the end).
+     */
+    pool->buffer = (unsigned char *) buffer;
+    pool->len = len;
+
+    pool->attached = 1;
+
+    pool->min_len = pool->max_len = pool->len;
+    pool->entropy = entropy;
+
+    return pool;
 }
 
 /*
@@ -465,7 +491,14 @@ void rand_pool_free(RAND_POOL *pool)
     if (pool == NULL)
         return;
 
-    OPENSSL_secure_clear_free(pool->buffer, pool->max_len);
+    /*
+     * Although it would be advisable from a cryptographical viewpoint,
+     * we are not allowed to clear attached buffers, since they are passed
+     * to rand_pool_attach() as `const unsigned char*`.
+     * (see corresponding comment in rand_pool_attach()).
+     */
+    if (!pool->attached)
+        OPENSSL_secure_clear_free(pool->buffer, pool->max_len);
     OPENSSL_free(pool);
 }
 
@@ -496,15 +529,27 @@ size_t rand_pool_length(RAND_POOL *pool)
 /*
  * Detach the |pool| buffer and return it to the caller.
  * It's the responsibility of the caller to free the buffer
- * using OPENSSL_secure_clear_free().
+ * using OPENSSL_secure_clear_free() or to re-attach it
+ * again to the pool using rand_pool_reattach().
  */
 unsigned char *rand_pool_detach(RAND_POOL *pool)
 {
     unsigned char *ret = pool->buffer;
     pool->buffer = NULL;
+    pool->entropy = 0;
     return ret;
 }
 
+/*
+ * Re-attach the |pool| buffer. It is only allowed to pass
+ * the |buffer| which was previously detached from the same pool.
+ */
+void rand_pool_reattach(RAND_POOL *pool, unsigned char *buffer)
+{
+    pool->buffer = buffer;
+    OPENSSL_cleanse(pool->buffer, pool->len);
+    pool->len = 0;
+}
 
 /*
  * If |entropy_factor| bits contain 1 bit of entropy, how many bytes does one
@@ -524,7 +569,7 @@ unsigned char *rand_pool_detach(RAND_POOL *pool)
  */
 size_t rand_pool_entropy_available(RAND_POOL *pool)
 {
-    if (pool->entropy < pool->requested_entropy)
+    if (pool->entropy < pool->entropy_requested)
         return 0;
 
     if (pool->len < pool->min_len)
@@ -540,8 +585,8 @@ size_t rand_pool_entropy_available(RAND_POOL *pool)
 
 size_t rand_pool_entropy_needed(RAND_POOL *pool)
 {
-    if (pool->entropy < pool->requested_entropy)
-        return pool->requested_entropy - pool->entropy;
+    if (pool->entropy < pool->entropy_requested)
+        return pool->entropy_requested - pool->entropy;
 
     return 0;
 }
@@ -601,6 +646,11 @@ int rand_pool_add(RAND_POOL *pool,
         return 0;
     }
 
+    if (pool->buffer == NULL) {
+        RANDerr(RAND_F_RAND_POOL_ADD, ERR_R_INTERNAL_ERROR);
+        return 0;
+    }
+
     if (len > 0) {
         memcpy(pool->buffer + pool->len, buffer, len);
         pool->len += len;
@@ -630,6 +680,11 @@ unsigned char *rand_pool_add_begin(RAND_POOL *pool, size_t len)
     if (len > pool->max_len - pool->len) {
         RANDerr(RAND_F_RAND_POOL_ADD_BEGIN, RAND_R_RANDOM_POOL_OVERFLOW);
         return NULL;
+    }
+
+    if (pool->buffer == NULL) {
+        RANDerr(RAND_F_RAND_POOL_ADD_BEGIN, ERR_R_INTERNAL_ERROR);
+        return 0;
     }
 
     return pool->buffer + pool->len;

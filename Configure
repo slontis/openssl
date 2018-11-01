@@ -1013,13 +1013,18 @@ if (scalar(@seed_sources) == 0) {
 if (scalar(grep { $_ eq 'none' } @seed_sources) > 0) {
     die "Cannot seed with none and anything else" if scalar(@seed_sources) > 1;
     warn <<_____ if scalar(@seed_sources) == 1;
-You have selected the --with-rand-seed=none option, which effectively disables
-automatic reseeding of the OpenSSL random generator. All operations depending
-on the random generator such as creating keys will not work unless the random
-generator is seeded manually by the application.
 
-Please read the 'Note on random number generation' section in the INSTALL
-instructions and the RAND_DRBG(7) manual page for more details.
+============================== WARNING ===============================
+You have selected the --with-rand-seed=none option, which effectively
+disables automatic reseeding of the OpenSSL random generator.
+All operations depending on the random generator such as creating keys
+will not work unless the random generator is seeded manually by the
+application.
+
+Please read the 'Note on random number generation' section in the
+INSTALL instructions and the RAND_DRBG(7) manual page for more details.
+============================== WARNING ===============================
+
 _____
 }
 push @{$config{openssl_other_defines}},
@@ -2079,7 +2084,7 @@ EOF
                 } elsif ($s =~ /\.ld$/) {
                     # We also recognise linker scripts (or corresponding)
                     # We know they are generated files
-                    my $ld = cleanfile($buildd, $s, $blddir);
+                    my $ld = cleanfile($buildd, $_, $blddir);
                     $unified_info{shared_sources}->{$ddest}->{$ld} = 1;
                 } else {
                     die "unrecognised source file type for shared library: $s\n";
@@ -2323,6 +2328,42 @@ EOF
                 [ @{$unified_info{includes}->{$dest}->{source}} ];
         } else {
             delete $unified_info{includes}->{$dest};
+        }
+    }
+
+    # For convenience collect information regarding directories where
+    # files are generated, those generated files and the end product
+    # they end up in where applicable.  Then, add build rules for those
+    # directories
+    my %loopinfo = ( "lib" => [ @{$unified_info{libraries}} ],
+                     "dso" => [ @{$unified_info{engines}} ],
+                     "bin" => [ @{$unified_info{programs}} ],
+                     "script" => [ @{$unified_info{scripts}} ] );
+    foreach my $type (keys %loopinfo) {
+        foreach my $product (@{$loopinfo{$type}}) {
+            my %dirs = ();
+            my $pd = dirname($product);
+
+            foreach (@{$unified_info{sources}->{$product} // []},
+                     @{$unified_info{shared_sources}->{$product} // []}) {
+                my $d = dirname($_);
+
+                # We don't want to create targets for source directories
+                # when building out of source
+                next if ($config{sourcedir} ne $config{builddir}
+                             && $d =~ m|^\Q$config{sourcedir}\E|);
+                # We already have a "test" target, and the current directory
+                # is just silly to make a target for
+                next if $d eq "test" || $d eq ".";
+
+                $dirs{$d} = 1;
+                push @{$unified_info{dirinfo}->{$d}->{deps}}, $_
+                    if $d ne $pd;
+            }
+            foreach (keys %dirs) {
+                push @{$unified_info{dirinfo}->{$_}->{products}->{$type}},
+                    $product;
+            }
         }
     }
 }
@@ -2799,10 +2840,16 @@ print <<"EOF";
 
 **********************************************************************
 ***                                                                ***
-***   If you want to report a building issue, please include the   ***
-***   output from this command:                                    ***
+***   OpenSSL has been successfully configured                     ***
 ***                                                                ***
-***     perl configdata.pm --dump                                  ***
+***   If you encounter a problem while building, please open an    ***
+***   issue on GitHub <https://github.com/openssl/openssl/issues>  ***
+***   and include the output from the following command:           ***
+***                                                                ***
+***       perl configdata.pm --dump                                ***
+***                                                                ***
+***   (If you are new to OpenSSL, you might want to consult the    ***
+***   'Troubleshooting' section in the INSTALL file first)         ***
 ***                                                                ***
 **********************************************************************
 EOF

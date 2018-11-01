@@ -112,6 +112,35 @@ extern const EVP_PKEY_METHOD hkdf_pkey_meth;
 extern const EVP_PKEY_METHOD poly1305_pkey_meth;
 extern const EVP_PKEY_METHOD siphash_pkey_meth;
 
+/* struct evp_mac_impl_st is defined by the implementation */
+typedef struct evp_mac_impl_st EVP_MAC_IMPL;
+struct evp_mac_st {
+    int type;
+    EVP_MAC_IMPL *(*new) (void);
+    int (*copy) (EVP_MAC_IMPL *macdst, EVP_MAC_IMPL *macsrc);
+    void (*free) (EVP_MAC_IMPL *macctx);
+    size_t (*size) (EVP_MAC_IMPL *macctx);
+    int (*init) (EVP_MAC_IMPL *macctx);
+    int (*update) (EVP_MAC_IMPL *macctx, const unsigned char *data,
+                   size_t datalen);
+    int (*final) (EVP_MAC_IMPL *macctx, unsigned char *out);
+    int (*ctrl) (EVP_MAC_IMPL *macctx, int cmd, va_list args);
+    int (*ctrl_str) (EVP_MAC_IMPL *macctx, const char *type, const char *value);
+};
+
+extern const EVP_MAC cmac_meth;
+extern const EVP_MAC hmac_meth;
+extern const EVP_MAC siphash_meth;
+
+/*
+ * This function is internal for now, but can be made external when needed.
+ * The documentation would read:
+ *
+ * EVP_add_mac() adds the MAC implementation C<mac> to the internal
+ * object database.
+ */
+int EVP_add_mac(const EVP_MAC *mac);
+
 struct evp_md_st {
     int type;
     int pkey_type;
@@ -423,6 +452,7 @@ struct evp_pkey_st {
 
 void openssl_add_all_ciphers_int(void);
 void openssl_add_all_digests_int(void);
+void openssl_add_all_macs_int(void);
 void evp_cleanup_int(void);
 void evp_app_cleanup_int(void);
 

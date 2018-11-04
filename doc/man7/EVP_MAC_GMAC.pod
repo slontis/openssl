@@ -2,16 +2,16 @@
 
 =head1 NAME
 
-EVP_MAC_SIPHASH - The SipHash EVP_MAC implementation
+EVP_MAC_GMAC - The GMAC EVP_MAC implementation
 
 =head1 DESCRIPTION
 
-Support for computing SipHash MACs through the B<EVP_MAC> API.
+Support for computing GMAC MACs through the B<EVP_MAC> API.
 
 =head2 Numeric identity
 
-B<EVP_MAC_SIPHASH> is the numeric identity for this implementation,
-and can be used in functions like EVP_MAC_CTX_new_id() and
+B<EVP_MAC_GMAC> is the numeric identity for this implementation, and
+can be used in functions like EVP_MAC_CTX_new_id() and
 EVP_get_macbynid().
 
 =head2 Supported controls
@@ -19,12 +19,6 @@ EVP_get_macbynid().
 The supported controls are:
 
 =over 4
-
-=item B<EVP_MAC_CTRL_SET_SIZE>
-
-EVP_MAC_ctrl_str() type string: "digestsize"
-
-The value string is expected to contain a decimal number.
 
 =item B<EVP_MAC_CTRL_SET_KEY>
 
@@ -42,6 +36,34 @@ The value string is expected to be a hexadecimal number, which will be
 decoded before passing on as control value.
 
 =back
+
+=item B<EVP_MAC_CTRL_SET_IV>
+
+EVP_MAC_ctrl_str() takes two type strings for this control:
+
+=over 4
+
+=item "iv"
+
+The value string is used as is.
+
+=item "hexiv"
+
+The value string is expected to be a hexadecimal number, which will be
+decoded before passing on as control value.
+
+=back
+
+=item B<EVP_MAC_CTRL_SET_ENGINE>
+
+=item B<EVP_MAC_CTRL_SET_CIPHER>
+
+These work as described in L<EVP_MAC(3)/CONTROLS> with the restriction that the
+cipher must be an AEAD one.
+
+EVP_MAC_ctrl_str() type string for B<EVP_MAC_CTRL_SET_CIPHER>: "cipher"
+
+The value is expected to be the name of a cipher.
 
 =back
 

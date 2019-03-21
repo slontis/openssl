@@ -533,7 +533,6 @@ int EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b, BN_CTX *ctx)
     if (r || BN_cmp(a1, b1) || BN_cmp(a2, b2) || BN_cmp(a3, b3))
         r = 1;
 
-    /* XXX EC_POINT_cmp() assumes that the methods are equal */
     if (r || EC_POINT_cmp(a, EC_GROUP_get0_generator(a),
                           EC_GROUP_get0_generator(b), ctx))
         r = 1;
@@ -543,17 +542,23 @@ int EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b, BN_CTX *ctx)
         /* compare the order and cofactor */
         ao = EC_GROUP_get0_order(a);
         bo = EC_GROUP_get0_order(b);
+        if (ao == NULL || bo == NULL) {
+            r = -1;
+            goto end;
+        }
+        if (BN_cmp(ao, bo)) {
+            r = 1;
+            goto end;
+        }
+        /* The cofactor is optional - so assume they match if either is NULL */
         ac = EC_GROUP_get0_cofactor(a);
         bc = EC_GROUP_get0_cofactor(b);
-        if (ao == NULL || bo == NULL) {
-            BN_CTX_end(ctx);
-            BN_CTX_free(ctx_new);
-            return -1;
-        }
-        if (BN_cmp(ao, bo) || BN_cmp(ac, bc))
+        if (ac == NULL || bc == NULL)
+            goto end;
+        if (BN_cmp(ac, bc))
             r = 1;
     }
-
+end:
     BN_CTX_end(ctx);
     BN_CTX_free(ctx_new);
 
@@ -621,9 +626,7 @@ int EC_POINT_copy(EC_POINT *dest, const EC_POINT *src)
         return 0;
     }
     if (dest->meth != src->meth
-            || (dest->curve_name != src->curve_name
-                && dest->curve_name != 0
-                && src->curve_name != 0)) {
+        && dest->meth->point_copy != src->meth->point_copy) {
         ECerr(EC_F_EC_POINT_COPY, EC_R_INCOMPATIBLE_OBJECTS);
         return 0;
     }

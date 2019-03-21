@@ -1556,6 +1556,116 @@ static const unsigned char p521_explicit[] = {
     0xbb, 0x6f, 0xb7, 0x1e, 0x91, 0x38, 0x64, 0x09, 0x02, 0x01, 0x01,
 };
 
+static int curve_nids[] = {
+    NID_secp112r1,
+    NID_sect283r1,
+    NID_X9_62_prime192v1,
+    NID_secp384r1,
+};
+
+static int check_named_curve(int id)
+{
+    int ret = 0, nid;
+    EC_GROUP *group = NULL, *other = NULL, *gtest = NULL;
+    const EC_POINT *group_gen = NULL;
+    EC_POINT *other_gen = NULL;
+    BIGNUM *group_p = NULL, *group_a = NULL, *group_b = NULL;
+    BIGNUM *other_p = NULL, *other_a = NULL, *other_b = NULL;
+    BIGNUM *group_cofactor = NULL, *other_cofactor = NULL;
+    BIGNUM *other_order = NULL;
+    const BIGNUM *group_order = NULL;
+
+    /* Do some setup */
+    nid = curve_nids[id];
+    if (!TEST_ptr(group = EC_GROUP_new_by_curve_name(nid))
+        || !TEST_ptr(gtest = EC_GROUP_dup(group))
+        || !TEST_ptr(group_p = BN_new())
+        || !TEST_ptr(group_a = BN_new())
+        || !TEST_ptr(group_b = BN_new())
+        || !TEST_ptr(group_cofactor = BN_new())
+        || !TEST_ptr(group_gen = EC_GROUP_get0_generator(group))
+        || !TEST_ptr(group_order = EC_GROUP_get0_order(group))
+        || !TEST_true(EC_GROUP_get_cofactor(group, group_cofactor, NULL))
+        || !TEST_true(EC_GROUP_get_curve(group, group_p, group_a, group_b, NULL))
+        || !TEST_ptr(other_gen = EC_POINT_dup(group_gen, group))
+        || !TEST_true(EC_POINT_add(group, other_gen, group_gen, group_gen, NULL))
+        || !TEST_ptr(other_order = BN_dup(group_order))
+        || !TEST_true(BN_add_word(other_order, 1))
+        || !TEST_ptr(other_p = BN_dup(group_p))
+        || !TEST_true(BN_add_word(other_p, 2))
+        || !TEST_ptr(other_a = BN_dup(group_a))
+        || !TEST_true(BN_add_word(other_a, 1))
+        || !TEST_ptr(other_b = BN_dup(group_b))
+        || !TEST_true(BN_add_word(other_b, 1))
+        || !TEST_ptr(other_cofactor = BN_dup(group_cofactor))
+        || !TEST_true(BN_add_word(other_cofactor, 1)))
+        goto err;
+
+    /* Passes because this is a valid curve */
+    if (!TEST_int_eq(EC_GROUP_check_named_curve(group, 0), nid)
+        /* Only NIST curves pass */
+	|| !TEST_int_eq(EC_GROUP_check_named_curve(group, 1),
+                        EC_curve_nid2nist(nid) != NULL ? nid : 0))
+        goto err;
+    /* Pass if the named curve is not known but the parameters are correct */
+    EC_GROUP_set_curve_name(group, 0);
+    if (!TEST_int_eq(EC_GROUP_check_named_curve(group, 0), nid))
+        goto err;
+    /* Fail if the curve name doesnt match the parameters */
+    EC_GROUP_set_curve_name(group, nid + 1);
+    if (!TEST_int_eq(EC_GROUP_check_named_curve(group, 0), 0))
+        goto err;
+    EC_GROUP_set_curve_name(group, 0);
+
+    /* Fail if there is a seed mismatch */
+    if (!TEST_int_eq(EC_GROUP_set_seed(group, p521_named, 1), 1)
+        || !TEST_int_eq(EC_GROUP_check_named_curve(group, 0), 0))
+        goto err;
+
+    /* Check that a duped group passes */
+    if (!TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), nid))
+        goto err;
+
+    /* check that changing any generator parameters fail */
+    if (!TEST_true(EC_GROUP_set_generator(gtest, other_gen, group_order, group_cofactor))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        || !TEST_true(EC_GROUP_set_generator(gtest, group_gen, other_order, group_cofactor))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        || !TEST_true(EC_GROUP_set_generator(gtest, group_gen, group_order, other_cofactor))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        || !TEST_true(EC_GROUP_set_generator(gtest, group_gen, group_order, group_cofactor))
+        /* check that restoring the generator passes */
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), nid)
+        /* check that changing any curve parameters fail */
+        || !TEST_true(EC_GROUP_set_curve(gtest, other_p, group_a, group_b, NULL))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        || !TEST_true(EC_GROUP_set_curve(gtest, group_p, other_a, group_b, NULL))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        || !TEST_true(EC_GROUP_set_curve(gtest, group_p, group_a, other_b, NULL))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        /* Check that restoring the curve parameters pass */
+        || !TEST_true(EC_GROUP_set_curve(gtest, group_p, group_a, group_b, NULL))
+        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), nid))
+        goto err;
+
+    ret = 1;
+err:
+    BN_free(group_p);
+    BN_free(other_p);
+    BN_free(group_a);
+    BN_free(other_a);
+    BN_free(group_b);
+    BN_free(other_b);
+    BN_free(group_cofactor);
+    BN_free(other_cofactor);
+    BN_free(other_order);
+    EC_POINT_free(other_gen);
+    EC_GROUP_free(gtest);
+    EC_GROUP_free(other);
+    EC_GROUP_free(group);
+    return ret;
+}
+
 static int parameter_test(void)
 {
     EC_GROUP *group = NULL, *group2 = NULL;
@@ -1621,6 +1731,7 @@ int setup_tests(void)
     ADD_ALL_TESTS(internal_curve_test, crv_len);
     ADD_ALL_TESTS(internal_curve_test_method, crv_len);
     ADD_TEST(group_field_test);
+    ADD_ALL_TESTS(check_named_curve, OSSL_NELEM(curve_nids));
 #endif
     return 1;
 }

@@ -14,6 +14,10 @@
 #include <openssl/obj_mac.h>
 #include <openssl/opensslconf.h>
 #include "internal/nelem.h"
+#include "internal/o_str.h"
+
+/* The maximum size of the order field used in the curve data tables */
+# define MAX_CURVE_ORDER_LEN (571 + 7) / 8
 
 typedef struct {
     int field_type,             /* either NID_X9_62_prime_field or
@@ -3196,4 +3200,72 @@ int EC_curve_nist2nid(const char *name)
             return nist_curves[i].nid;
     }
     return NID_undef;
+}
+
+/*
+ * Validates EC domain parameter data for known named curves.
+ * This can be used when a curve is loaded explicitly (without a curve
+ * name) or to validate that domain parameters have not been modified.
+ *
+ * Returns: The nid associated with the found named curve or O if not found.
+ */
+int ec_curve_nid_from_params(const EC_GROUP *group)
+{
+    int ret = 0, nid, len, field_type, group_ord_bytes_len;
+    size_t i, seed_len;
+    const unsigned char *seed, *params_seed, *params_order;
+    unsigned char group_ord_bytes[MAX_CURVE_ORDER_LEN];
+    const const EC_CURVE_DATA *data;
+    const EC_METHOD *meth;
+    EC_GROUP *tmp = NULL;
+    BN_CTX *ctx = NULL;
+
+    meth = EC_GROUP_method_of(group);
+    if (meth == NULL)
+        return 0;
+    /* Use the optional named curve nid as a search field */
+    nid = EC_GROUP_get_curve_name(group);
+    field_type = EC_METHOD_get_field_type(meth);
+    seed_len = EC_GROUP_get_seed_len(group);
+    seed = EC_GROUP_get0_seed(group);
+    group_ord_bytes_len = (EC_GROUP_get_degree(group) + 7) / 8;
+    /* There can be zeros in the top of the order field - so zero pad it */
+    len = BN_bn2binpad(group->order, group_ord_bytes, group_ord_bytes_len);
+    if (len <= 0)
+        return 0;
+
+    ctx = BN_CTX_new();
+    if (ctx == NULL)
+        return 0;
+    for (i = 0; i < curve_list_length; i++)
+    {
+        const ec_list_element curve = curve_list[i];
+
+        data = curve.data;
+        /* Get the raw order byte data */
+        params_seed = (const unsigned char *)(data + 1); /* skip header */
+        params_order =  params_seed + data->seed_len + 5 * data->param_len;
+        /* Look for unique fields in the fixed curve data */
+        if (data->field_type == field_type
+                && len == data->param_len
+                && (nid <= 0 || nid == curve.nid)
+                && (data->seed_len == 0
+                    || ((size_t)data->seed_len == seed_len
+                        && OPENSSL_memcmp(params_seed, seed, seed_len) == 0))
+                && OPENSSL_memcmp(group_ord_bytes, params_order, len) == 0) {
+            tmp = ec_group_new_from_data(curve);
+            if (tmp == NULL)
+                break;
+            /* Check that the passed in curve matches the approved curve */
+            if (EC_GROUP_cmp(group, tmp, ctx) == 0) {
+                ret = curve.nid;
+                break;
+            }
+            EC_GROUP_free(tmp);
+            tmp = NULL;
+        }
+    }
+    EC_GROUP_free(tmp);
+    BN_CTX_free(ctx);
+    return ret;
 }

@@ -17,6 +17,7 @@
 # include <openssl/symhacks.h>
 # include <openssl/bio.h>
 # include <openssl/evperr.h>
+# include <openssl/core.h>
 
 # define EVP_MAX_MD_SIZE                 64/* longest known is SHA512 */
 # define EVP_MAX_KEY_LENGTH              64
@@ -1022,6 +1023,7 @@ int EVP_MAC_vctrl(EVP_MAC_CTX *ctx, int cmd, va_list args);
 int EVP_MAC_ctrl_str(EVP_MAC_CTX *ctx, const char *type, const char *value);
 int EVP_MAC_str2ctrl(EVP_MAC_CTX *ctx, int cmd, const char *value);
 int EVP_MAC_hex2ctrl(EVP_MAC_CTX *ctx, int cmd, const char *value);
+int EVP_MAC_set_params(EVP_MAC_CTX *ctx, const OSSL_PARAM params[]);
 int EVP_MAC_nid(const EVP_MAC *mac);
 
 # define EVP_get_macbynid(a)    EVP_get_macbyname(OBJ_nid2sn(a))

@@ -181,6 +181,18 @@ int EVP_MAC_hex2ctrl(EVP_MAC_CTX *ctx, int cmd, const char *hex)
     return rv;
 }
 
+int EVP_MAC_set_params(EVP_MAC_CTX *ctx, const OSSL_PARAM params[])
+{
+    int ok = 1;
+
+    if (ctx == NULL || ctx->meth == NULL || ctx->meth->set_params == NULL) {
+        return -2;
+    }
+
+    ok = ctx->meth->set_params(ctx->data, params);
+    return ok;
+}
+
 int EVP_MAC_nid(const EVP_MAC *mac)
 {
     return mac->type;

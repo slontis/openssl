@@ -14,6 +14,8 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/core.h>
+#include <openssl/params.h>
 
 #undef BUFSIZE
 #define BUFSIZE 1024*8
@@ -37,6 +39,7 @@ const OPTIONS mac_options[] = {
     {NULL}
 };
 
+/*
 static int mac_ctrl_string(EVP_MAC_CTX *ctx, const char *value)
 {
     int rv;
@@ -52,6 +55,104 @@ static int mac_ctrl_string(EVP_MAC_CTX *ctx, const char *value)
     }
     rv = EVP_MAC_ctrl_str(ctx, stmp, vtmp);
     OPENSSL_free(stmp);
+    return rv;
+}
+*/
+
+static int hex2param(OSSL_PARAM *p, const char *key, const char *hex,
+                     unsigned char **out)
+{
+    long binlen = 0;
+    unsigned char *bin = NULL;
+
+    bin = OPENSSL_hexstr2buf(hex, &binlen);
+    if (bin == NULL)
+        return 0;
+    if (binlen <= INT_MAX) {
+        *p = OSSL_PARAM_construct_octet_ptr(key + 3, (void **)out, binlen, NULL);
+        *out = bin;
+        return 1;
+    }
+    OPENSSL_free(bin);
+    return 0;
+}
+
+static int str2param(OSSL_PARAM *p, const char *key, char **value)
+{
+    size_t len;
+
+    len = strlen(*value);
+    if (len > INT_MAX)
+        return 0;
+    *p = OSSL_PARAM_construct_octet_ptr(key, (void **)value, len, NULL);
+    return 1;
+}
+
+static int mac_set_params(EVP_MAC_CTX *ctx, STACK_OF(OPENSSL_STRING) *opts)
+{
+    int rv = 0, i;
+    char *ktmp, *vtmp = NULL;
+    size_t outlen = 0, n = 0;
+    OSSL_PARAM params[5];
+    unsigned char *tmp_key = NULL, *tmp_salt = NULL, *tmp_custom = NULL;
+
+    for (i = 0; i < sk_OPENSSL_STRING_num(opts); i++) {
+        char *opt = sk_OPENSSL_STRING_value(opts, i);
+
+        rv = 0;
+        ktmp = opt; /* OPENSSL_strdup(opt); */
+        if (ktmp == NULL)
+            goto err;
+        vtmp = strchr(ktmp, ':');
+        if (vtmp != NULL) {
+            *vtmp = 0;
+            vtmp++;
+        }
+        if (strcmp("key", ktmp) == 0) {
+            rv = str2param(&params[n], ktmp, &vtmp);
+            goto end;
+        }
+        if (strcmp("hexkey", ktmp) == 0) {
+            rv = hex2param(&params[n], ktmp, vtmp, &tmp_key);
+            goto end;
+        }
+        if (strcmp("custom", ktmp) == 0) {
+            rv = str2param(&params[n], ktmp, &vtmp);
+            goto end;
+        }
+        if (strcmp("hexcustom", ktmp) == 0) {
+            rv = hex2param(&params[n], ktmp, vtmp, &tmp_custom);
+            goto end;
+        }
+        if (strcmp("salt", ktmp) == 0) {
+            rv = str2param(&params[n], ktmp, &vtmp);
+            goto end;
+        }
+        if (strcmp("hexsalt", ktmp) == 0) {
+            rv = hex2param(&params[n], ktmp, vtmp, &tmp_salt);
+            goto end;
+        }
+        if (strcmp("outlen", ktmp) == 0) {
+            outlen = (size_t)atoi(vtmp);
+            params[n] = OSSL_PARAM_construct_size_t(ktmp, &outlen, NULL);
+            goto end;
+        }
+end:
+        /* OPENSSL_free(ktmp); */
+        if (rv <= 0) {
+            BIO_printf(bio_err, "MAC parameter error '%s'\n", opt);
+            return rv;
+        }
+        n++;
+        if ((n + 1) >= OSSL_NELEM(params))
+            return 0;
+    }
+    params[n] = OSSL_PARAM_construct_end();
+    rv = EVP_MAC_set_params(ctx, params);
+err:
+    OPENSSL_free(tmp_key);
+    OPENSSL_free(tmp_salt);
+    OPENSSL_free(tmp_custom);
     return rv;
 }
 
@@ -101,6 +202,7 @@ opthelp:
             break;
         }
     }
+
     argc = opt_num_rest();
     argv = opt_rest();
 
@@ -119,16 +221,8 @@ opthelp:
     if (ctx == NULL)
         goto err;
 
-    if (opts != NULL) {
-        for (i = 0; i < sk_OPENSSL_STRING_num(opts); i++) {
-            char *opt = sk_OPENSSL_STRING_value(opts, i);
-            if (mac_ctrl_string(ctx, opt) <= 0) {
-                BIO_printf(bio_err, "MAC parameter error '%s'\n", opt);
-                ERR_print_errors(bio_err);
-                goto err;
-            }
-        }
-    }
+    if (opts != NULL && mac_set_params(ctx, opts) <= 0)
+        goto err;
 
     /* Use text mode for stdin */
     if (infile == NULL || strcmp(infile, "-") == 0)

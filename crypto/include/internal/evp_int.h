@@ -9,6 +9,7 @@
 
 #include <openssl/evp.h>
 #include <openssl/core_numbers.h>
+#include <openssl/params.h>
 #include "internal/refcount.h"
 
 /*
@@ -127,6 +128,7 @@ struct evp_mac_st {
     int (*final) (EVP_MAC_IMPL *macctx, unsigned char *out);
     int (*ctrl) (EVP_MAC_IMPL *macctx, int cmd, va_list args);
     int (*ctrl_str) (EVP_MAC_IMPL *macctx, const char *type, const char *value);
+    int (*set_params) (EVP_MAC_IMPL *macctx, const OSSL_PARAM params[]);
 };
 
 extern const EVP_MAC blake2b_mac_meth;

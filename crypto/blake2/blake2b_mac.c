@@ -14,6 +14,7 @@
 # include "internal/cryptlib.h"
 # include "internal/evp_int.h"
 
+
 /* typedef EVP_MAC_IMPL */
 struct evp_mac_impl_st {
     BLAKE2B_CTX ctx;
@@ -174,6 +175,49 @@ static size_t blake2b_mac_size(EVP_MAC_IMPL *macctx)
     return macctx->params.digest_length;
 }
 
+static int blake2b_set_params(EVP_MAC_IMPL *macctx, const OSSL_PARAM params[])
+{
+    const OSSL_PARAM *p = NULL;
+    size_t sz, key_len, custom_len, salt_len;
+    const void *key = NULL, *salt = NULL, *custom = NULL;
+
+    p = OSSL_PARAM_locate(params, "key");
+    if (p != NULL) {
+        OSSL_PARAM_get_octet_ptr(p, &key, &key_len);
+        if (key_len < 1 || key_len > BLAKE2B_KEYBYTES) {
+            return 0;
+        }
+        blake2b_param_set_key_length(&macctx->params, (uint8_t)key_len);
+        memcpy(macctx->key, key, key_len);
+        memset(macctx->key + key_len, 0, BLAKE2B_KEYBYTES - key_len);
+    }
+    p = OSSL_PARAM_locate(params, "salt");
+    if (p != NULL) {
+        OSSL_PARAM_get_octet_ptr(p, &salt, &salt_len);
+        if (salt_len > BLAKE2B_SALTBYTES) {
+            return 0;
+        }
+        blake2b_param_set_salt(&macctx->params, salt, salt_len);
+    }
+    p = OSSL_PARAM_locate(params, "custom");
+    if (p != NULL) {
+        OSSL_PARAM_get_octet_ptr(p, &custom, &custom_len);
+        if (custom_len > BLAKE2B_PERSONALBYTES) {
+            return 0;
+        }
+        blake2b_param_set_personal(&macctx->params, custom, custom_len);
+    }
+    p = OSSL_PARAM_locate(params, "outlen");
+    if (p != NULL) {
+        OSSL_PARAM_get_size_t(p, &sz);
+        if (sz < 1 || sz > BLAKE2B_OUTBYTES) {
+            return 0;
+        }
+        blake2b_param_set_digest_length(&macctx->params, (uint8_t)sz);
+    }
+    return 1;
+}
+
 const EVP_MAC blake2b_mac_meth = {
     EVP_MAC_BLAKE2B,
     blake2b_mac_new,
@@ -184,7 +228,8 @@ const EVP_MAC blake2b_mac_meth = {
     blake2b_mac_update,
     blake2b_mac_final,
     blake2b_mac_ctrl,
-    blake2b_mac_ctrl_str
+    blake2b_mac_ctrl_str,
+    blake2b_set_params
 };
 
 #endif

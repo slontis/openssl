@@ -70,6 +70,7 @@ static const unsigned char kmac_custom_str[] = { 0x4B, 0x44, 0x46 };
 static int SSKDF_hash_kdm(const EVP_MD *kdf_md,
                           const unsigned char *z, size_t z_len,
                           const unsigned char *info, size_t info_len,
+                          unsigned int append_ctr,
                           unsigned char *derived_key, size_t derived_key_len)
 {
     int ret = 0, hlen;
@@ -104,8 +105,9 @@ static int SSKDF_hash_kdm(const EVP_MD *kdf_md,
         c[3] = (unsigned char)(counter & 0xff);
 
         if (!(EVP_MD_CTX_copy_ex(ctx, ctx_init)
-                && EVP_DigestUpdate(ctx, c, sizeof(c))
+                && (append_ctr || EVP_DigestUpdate(ctx, c, sizeof(c)))
                 && EVP_DigestUpdate(ctx, z, z_len)
+                && (!append_ctr || EVP_DigestUpdate(ctx, c, sizeof(c)))
                 && EVP_DigestUpdate(ctx, info, info_len)))
             goto end;
         if (len >= out_len) {
@@ -468,7 +470,27 @@ static int sskdf_derive(EVP_KDF_IMPL *impl, unsigned char *key, size_t keylen)
             return 0;
         }
         return SSKDF_hash_kdm(impl->md, impl->secret, impl->secret_len,
-                              impl->info, impl->info_len, key, keylen);
+                              impl->info, impl->info_len, 0, key, keylen);
+    }
+}
+
+static int x963kdf_derive(EVP_KDF_IMPL *impl, unsigned char *key, size_t keylen)
+{
+    if (impl->secret == NULL) {
+        KDFerr(KDF_F_X963KDF_DERIVE, KDF_R_MISSING_SECRET);
+        return 0;
+    }
+
+    if (impl->mac != NULL) {
+        return 0;
+    } else {
+        /* H(x) = hash */
+        if (impl->md == NULL) {
+            KDFerr(KDF_F_X963KDF_DERIVE, KDF_R_MISSING_MESSAGE_DIGEST);
+            return 0;
+        }
+        return SSKDF_hash_kdm(impl->md, impl->secret, impl->secret_len,
+                              impl->info, impl->info_len, 1, key, keylen);
     }
 }
 
@@ -481,4 +503,15 @@ const EVP_KDF ss_kdf_meth = {
     sskdf_ctrl_str,
     sskdf_size,
     sskdf_derive
+};
+
+const EVP_KDF x963_kdf_meth = {
+    EVP_KDF_X963,
+    sskdf_new,
+    sskdf_free,
+    sskdf_reset,
+    sskdf_ctrl,
+    sskdf_ctrl_str,
+    sskdf_size,
+    x963kdf_derive
 };

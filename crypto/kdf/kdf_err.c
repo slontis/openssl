@@ -65,6 +65,7 @@ static const ERR_STRING_DATA KDF_str_functs[] = {
     {ERR_PACK(ERR_LIB_KDF, KDF_F_SSKDF_NEW, 0), "sskdf_new"},
     {ERR_PACK(ERR_LIB_KDF, KDF_F_SSKDF_SIZE, 0), "sskdf_size"},
     {ERR_PACK(ERR_LIB_KDF, KDF_F_TLS1_PRF_ALG, 0), "tls1_prf_alg"},
+    {ERR_PACK(ERR_LIB_KDF, KDF_F_X963KDF_DERIVE, 0), "x963kdf_derive"},
     {0, NULL}
 };
 

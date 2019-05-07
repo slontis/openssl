@@ -62,6 +62,7 @@ int ERR_load_KDF_strings(void);
 # define KDF_F_SSKDF_NEW                                  137
 # define KDF_F_SSKDF_SIZE                                 138
 # define KDF_F_TLS1_PRF_ALG                               111
+# define KDF_F_X963KDF_DERIVE                             139
 
 /*
  * KDF reason codes.

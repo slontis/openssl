@@ -101,7 +101,15 @@ typedef struct evp_pkey_asn1_method_st EVP_PKEY_ASN1_METHOD;
 typedef struct evp_pkey_method_st EVP_PKEY_METHOD;
 typedef struct evp_pkey_ctx_st EVP_PKEY_CTX;
 
+/**
+ * @ingroup CRYPTO_KDF_OBJECTS
+ * @brief Opaque type that holds the implementation of a KDF.
+ */
 typedef struct evp_kdf_st EVP_KDF;
+/**
+ * @ingroup CRYPTO_KDF_OBJECTS
+ * @brief Opaque KDF context type that holds the algorithm inputs.
+ */
 typedef struct evp_kdf_ctx_st EVP_KDF_CTX;
 
 typedef struct evp_Encode_Ctx_st EVP_ENCODE_CTX;

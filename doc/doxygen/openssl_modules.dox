@@ -1,0 +1,108 @@
+/*
+ * OpenSSL API group definitions.
+ */
+//----------------------------------------------------------------------------------
+/**
+ * @defgroup CRYPTO Cryptographic Operations
+ */
+
+/**
+ * @defgroup CRYPTO_KDF Key Derivation
+ * @ingroup CRYPTO
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_OBJECTS Key Derivation Objects.
+ * @ingroup CRYPTO_KDF
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_FUNCTIONS Key Derivation Functions.
+ * @ingroup CRYPTO_KDF
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_ALGS Key Derivation Algorithms
+ * @ingroup CRYPTO_KDF
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_SSKDF EVP_KDF_SSKDF
+ * @ingroup CRYPTO_KDF_ALGS
+ * The Single Step / One Step EVP_KDF implementation
+ */
+ 
+/**
+ * @defgroup CRYPTO_KDF_PBKDF2 EVP_KDF_PBKDF2
+ * @ingroup CRYPTO_KDF_ALGS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_SCRYPT EVP_KDF_SCRYPT
+ * @ingroup CRYPTO_KDF_ALGS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_TLS1_PRF EVP_KDF_TLS1_PRF
+ * @ingroup CRYPTO_KDF_ALGS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_HKDF EVP_KDF_HKDF
+ * @ingroup CRYPTO_KDF_ALGS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_SSHKDF EVP_SSHKDF
+ * @ingroup CRYPTO_KDF_ALGS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_CTRLS Key Derivation Controls.
+ * @ingroup CRYPTO_KDF
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_CTRLS_ID Key Derivation Control Identifiers.
+ * @ingroup CRYPTO_KDF_CTRLS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_CTRLS_TYPES Key Derivation Control Types.
+ * @ingroup CRYPTO_KDF_CTRLS
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_HKDF_MODE EVP_KDF_HKDF_MODE
+ * @ingroup CRYPTO_KDF_CTRLS_TYPES
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_SSHKDF_TYPE EVP_KDF_SSHKDF_TYPE
+ * @ingroup CRYPTO_KDF_CTRLS_TYPES
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_LEGACY Key Derivation legacy PKEY operations.
+ * @ingroup CRYPTO_KDF
+ */
+ 
+/**
+ * @defgroup CRYPTO_KDF_LEGACY_CTRLS legacy PKEY Controls.
+ * @ingroup CRYPTO_KDF_LEGACY
+ */
+
+/**
+ * @defgroup CRYPTO_KDF_LEGACY_FUNC legacy PKEY Functions.
+ * @ingroup CRYPTO_KDF_LEGACY
+ */
+
+ //----------------------------------------------------------------------------------
+/**
+ * @defgroup TLS TLS
+ */
+
+/**
+ * @defgroup TLS_TYPES TLS Objects and Constants
+ * @ingroup TLS
+ */

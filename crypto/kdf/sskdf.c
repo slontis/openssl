@@ -8,6 +8,142 @@
  * https://www.openssl.org/source/license.html
  */
 
+/**
+ * @addtogroup CRYPTO_KDF_SSKDF
+ *
+ * The @ref EVP_KDF_SS algorithm implements the Single Step key derivation
+ * function (SSKDF). SSKDF derives a key using input such as a shared secret key
+ * (that was generated during the execution of a key establishment scheme) and
+ * fixedinfo. SSKDF is also informally referred to as 'Concat KDF'.
+ *
+ * @section aux Auxilary function
+ * The implementation uses a selectable auxiliary function H, which is one of:
+ *
+ * | Auxiliary Function Hx = ||
+ * | :---- ||
+ * | hash(x, digest=md) ||
+ * | HMAC_hash(x, key=salt, digest=md) ||
+ * | KMACxxx(x, key=salt, custom="KDF", outlen=mac_size) ||
+ *
+ * Both the HMAC and KMAC implementations set the key using the 'salt' value.
+ * The hash and HMAC also require the digest to be set.
+ *
+ * @section controls Supported Controls
+ * The supported controls used by EVP_KDF_ctrl() are:
+ * | Supported controls ||
+ * | :---- ||
+ * | @ref EVP_KDF_CTRL_SET_MD  ||
+ * | @ref EVP_KDF_CTRL_SET_MAC ||
+ * | @ref EVP_KDF_CTRL_SET_MAC_SIZE ||
+ * | @ref EVP_KDF_CTRL_SET_SALT ||
+ * | @ref EVP_KDF_CTRL_SET_KEY ||
+ * | @ref EVP_KDF_CTRL_SET_SSKDF_INFO ||
+ *
+ * @section EXAMPLE
+ *
+ * This example derives 10 bytes using H(x) = SHA-256, with the secret key "secret"
+ * and fixedinfo value "label".
+ *
+ * @code
+ * EVP_KDF_CTX *kctx;
+ * unsigned char out[10];
+ *
+ * kctx = EVP_KDF_CTX_new_id(EVP_KDF_SS);
+ *
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, EVP_sha256()) <= 0) {
+ *   error("EVP_KDF_CTRL_SET_MD");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_KEY, "secret", (size_t)6) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_KEY");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SSKDF_INFO, "label", (size_t)5) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_SSKDF_INFO");
+ * }
+ * if (EVP_KDF_derive(kctx, out, sizeof(out)) <= 0) {
+ *     error("EVP_KDF_derive");
+ * }
+ *
+ * EVP_KDF_CTX_free(kctx);
+ * @endcode
+ *
+ * @section EXAMPLE
+ *
+ * This example derives 10 bytes using H(x) = HMAC(SHA-256), with the secret key "secret",
+ * fixedinfo value "label" and salt "salt".
+ *
+ * @code
+ * EVP_KDF_CTX *kctx;
+ * unsigned char out[10];
+ *
+ * kctx = EVP_KDF_CTX_new_id(EVP_KDF_SS);
+ *
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MAC, EVP_get_macbyname("HMAC")) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_MAC");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, EVP_sha256()) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_MD");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_KEY, "secret", (size_t)6) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_KEY");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SSKDF_INFO, "label", (size_t)5) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_SSKDF_INFO");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SALT, "salt", (size_t)4) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_SALT");
+ * }
+ * if (EVP_KDF_derive(kctx, out, sizeof(out)) <= 0) {
+ *     error("EVP_KDF_derive");
+ * }
+ *
+ * EVP_KDF_CTX_free(kctx);
+ * @endcode
+ *
+ * @section EXAMPLE
+ *
+ * This example derives 10 bytes using H(x) = KMAC128(x,salt,outlen), with the secret key "secret"
+ * fixedinfo value "label", salt of "salt" and KMAC outlen of 20:
+ *
+ * @code
+ * EVP_KDF_CTX *kctx;
+ * unsigned char out[10];
+ *
+ * kctx = EVP_KDF_CTX_new_id(EVP_KDF_SS);
+ *
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MAC, EVP_get_macbyname("KMAC128")) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_MAC");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, EVP_sha256()) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_MD");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_KEY, "secret", (size_t)6) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_KEY");
+ * }
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SSKDF_INFO, "label", (size_t)5) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_SSKDF_INFO");
+ * }
+ * // If not specified the salt will be set to a default value
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SALT, "salt", (size_t)4) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_SALT");
+ * }
+ * // If not specified the default size will be the size of the derived key
+ * if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MAC_SIZE, (size_t)20) <= 0) {
+ *     error("EVP_KDF_CTRL_SET_MAC_SIZE");
+ * }
+ * if (EVP_KDF_derive(kctx, out, sizeof(out)) <= 0) {
+ *     error("EVP_KDF_derive");
+ * }
+ *
+ * EVP_KDF_CTX_free(kctx);
+ * @endcode
+ *
+ * @section conform Conforms to
+ * <a href="https://csrc.nist.gov/publications/detail/sp/800-56c/rev-1/final">NIST SP800-56Cr1</a>
+ *
+ * @section history History
+ * This functionality was added to OpenSSL 3.0.0.
+ */
+
 /*
  * Refer to https://csrc.nist.gov/publications/detail/sp/800-56c/rev-1/final
  * Section 4.1.

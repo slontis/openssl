@@ -159,6 +159,7 @@ int ossl_param_bld_push_BN(OSSL_PARAM_BLD *bld, const char *key,
     return 1;
 }
 
+
 int ossl_param_bld_push_utf8_string(OSSL_PARAM_BLD *bld, const char *key,
                                     char *buf, size_t bsize)
 {
@@ -231,6 +232,98 @@ int ossl_param_bld_push_octet_ptr(OSSL_PARAM_BLD *bld, const char *key,
     return 1;
 }
 
+int ossl_param_bld_push_from_text(OSSL_PARAM_BLD *bld, const char *key,
+                                  const char *value, size_t value_n,
+                                  const OSSL_PARAM *paramdefs)
+{
+    OSSL_PARAM_BLD_DEF *pd;
+    const OSSL_PARAM *paramdef;
+    BIGNUM *bn = NULL;
+    size_t sz;
+    int ishex = strncmp(key, "hex", 3) == 0;
+
+    if (ishex)
+        key += 3;
+
+    paramdef = OSSL_PARAM_locate_const(paramdefs, key);
+    if (paramdef == NULL)
+        return 0;
+
+    switch (paramdef->data_type) {
+    case OSSL_PARAM_INTEGER:
+    case OSSL_PARAM_UNSIGNED_INTEGER:
+        if (ishex)
+            BN_hex2bn(&bn, value);
+        else
+            BN_dec2bn(&bn, value);
+        if (bn == NULL)
+            return 0;
+
+        /*
+         * 2s complement negate, part 1
+         *
+         * BN_bn2nativepad puts the absolute value of the number in the
+         * buffer, i.e. if it's negative, we need to deal with it.  We do
+         * it by subtracting 1 here and inverting the bytes in
+         * construct_from_text() below.
+         */
+        if (paramdef->data_type == OSSL_PARAM_INTEGER && BN_is_negative(bn)
+            && !BN_sub_word(bn, 1)) {
+            goto err;
+        }
+
+        sz = BN_num_bytes(bn);
+
+        /*
+         * TODO(v3.0) is this the right way to do this?  This code expects
+         * a zero data size to simply mean "arbitrary size".
+         */
+        if (paramdef->data_size > 0) {
+            if (sz >= paramdef->data_size) {
+                CRYPTOerr(0, CRYPTO_R_TOO_SMALL_BUFFER);
+                /* Since this is a different error, we don't break */
+                goto err;
+            }
+            /* Change actual size to become the desired size. */
+            sz = paramdef->data_size;
+        }
+        break;
+    case OSSL_PARAM_UTF8_STRING:
+        if (ishex) {
+            CRYPTOerr(0, ERR_R_PASSED_INVALID_ARGUMENT);
+            return 0;
+        }
+        sz = strlen(value) + 1;
+        break;
+    case OSSL_PARAM_OCTET_STRING:
+        if (ishex) {
+            if (!OPENSSL_hexstr2buf_ex(NULL, 0, &sz, value))
+                return 0;
+        } else {
+            sz = value_n;
+        }
+        break;
+    default:
+        goto err;
+    }
+    pd = param_push(bld, paramdef->key, sz, sz, paramdef->data_type, 0);
+    if (pd == NULL)
+        return 0;
+    pd->flags = PARAM_BUILD_FLAG_FROM_TEXT;
+    if (bn != NULL) {
+        pd->bn = bn;
+        pd->flags |= PARAM_BUILD_FLAG_BN_ALLOCED;
+    } else {
+        pd->string = (void *)value;
+    }
+    if (ishex)
+        pd->flags |= PARAM_BUILD_FLAG_HEX;
+    return 1;
+err:
+    BN_free(bn);
+    return 0;
+}
+
 static OSSL_PARAM *param_bld_convert(OSSL_PARAM_BLD *bld, OSSL_PARAM *param,
                                      OSSL_PARAM_BLD_BLOCK *blk,
                                      OSSL_PARAM_BLD_BLOCK *secure)
@@ -257,6 +350,19 @@ static OSSL_PARAM *param_bld_convert(OSSL_PARAM_BLD *bld, OSSL_PARAM *param,
         if (pd->bn != NULL) {
             /* BIGNUM */
             BN_bn2nativepad(pd->bn, (unsigned char *)p, pd->size);
+            if (pd->type == OSSL_PARAM_INTEGER && BN_is_negative(pd->bn)) {
+                /*
+                 * 2s complement negate, part two.
+                 *
+                 * Because we did the first part on the BIGNUM itself, we can
+                 * just invert all the bytes here and be done with it.
+                 */
+                unsigned char *cp;
+                size_t j = pd->size;
+
+                for (cp = p; j-- > 0; cp++)
+                    *cp ^= 0xFF;
+            }
         } else if (pd->type == OSSL_PARAM_OCTET_PTR
                    || pd->type == OSSL_PARAM_UTF8_PTR) {
             /* PTR */
@@ -267,6 +373,13 @@ static OSSL_PARAM *param_bld_convert(OSSL_PARAM_BLD *bld, OSSL_PARAM *param,
                 memcpy(p, pd->string, pd->size);
             else
                 memset(p, 0, pd->size);
+        } else if (pd->type == OSSL_PARAM_UTF8_STRING) {
+            strncpy(p, pd->string, pd->size);
+        } else if (pd->type == OSSL_PARAM_OCTET_STRING) {
+            if ((pd->flags & PARAM_BUILD_FLAG_HEX) != 0)
+                OPENSSL_hexstr2buf_ex(p, pd->size, NULL, pd->string);
+            else
+                memcpy(p, pd->string, pd->size);
         } else {
             /* Number, but could also be a NULL BIGNUM */
             if (pd->size > sizeof(pd->num))
@@ -274,7 +387,11 @@ static OSSL_PARAM *param_bld_convert(OSSL_PARAM_BLD *bld, OSSL_PARAM *param,
             else if (pd->size > 0)
                 memcpy(p, &pd->num, pd->size);
         }
+        if (pd->bn != NULL && (pd->flags & PARAM_BUILD_FLAG_BN_ALLOCED) != 0) {
+            BN_free((BIGNUM *)pd->bn);
+        }
     }
+
     param[i] = OSSL_PARAM_construct_end();
     return param + i;
 }

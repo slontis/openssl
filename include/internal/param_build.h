@@ -13,10 +13,15 @@
 
 #define OSSL_PARAM_BLD_MAX 10
 
+#define PARAM_BUILD_FLAG_FROM_TEXT  (1<<0)
+#define PARAM_BUILD_FLAG_BN_ALLOCED (1<<1)
+#define PARAM_BUILD_FLAG_HEX        (1<<2)
+
 typedef struct {
     const char *key;
     int type;
     int secure;
+    size_t flags;
     size_t size;
     size_t alloc_blocks;
     const BIGNUM *bn;
@@ -24,7 +29,7 @@ typedef struct {
     union {
         /*
          * These fields are never directly addressed, but their sizes are
-         * imporant so that all native types can be copied here without overrun.
+         * important so that all native types can be copied here without overrun.
          */
         ossl_intmax_t i;
         ossl_uintmax_t u;
@@ -76,3 +81,7 @@ int ossl_param_bld_push_octet_string(OSSL_PARAM_BLD *bld, const char *key,
                                      void *buf, size_t bsize);
 int ossl_param_bld_push_octet_ptr(OSSL_PARAM_BLD *bld, const char *key,
                                   void *buf, size_t bsize);
+int ossl_param_bld_push_from_text(OSSL_PARAM_BLD *bld, const char *key,
+                                  const char *value, size_t value_n,
+                                  const OSSL_PARAM *paramdefs);
+

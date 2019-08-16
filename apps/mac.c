@@ -15,6 +15,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/params.h>
+#include "internal/param_build.h"
 
 #undef BUFSIZE
 #define BUFSIZE 1024*8
@@ -54,6 +55,9 @@ int mac_main(int argc, char **argv)
     const char *infile = NULL;
     int out_bin = 0;
     int inform = FORMAT_BINARY;
+    OSSL_PARAM_BLD param_build;
+
+    ossl_param_bld_init(&param_build);
 
     prog = opt_init(argc, argv, mac_options);
     buf = app_malloc(BUFSIZE, "I/O buffer");
@@ -103,9 +107,7 @@ opthelp:
         goto err;
 
     if (opts != NULL) {
-        OSSL_PARAM *params =
-            OPENSSL_zalloc(sizeof(OSSL_PARAM)
-                           * (sk_OPENSSL_STRING_num(opts) + 1));
+        OSSL_PARAM *params;
         const OSSL_PARAM *paramdefs = EVP_MAC_CTX_settable_params(mac);
         size_t params_n;
         int ok = 1;
@@ -118,8 +120,8 @@ opthelp:
             if ((stmp = OPENSSL_strdup(opt)) == NULL
                 || (vtmp = strchr(stmp, ':')) == NULL
                 || (*vtmp++ = 0) /* Always zero */
-                || !OSSL_PARAM_allocate_from_text(&params[params_n], paramdefs,
-                                                  stmp, vtmp, strlen(vtmp))) {
+                || !ossl_param_bld_push_from_text(&param_build, stmp, vtmp,
+                                                  strlen(vtmp), paramdefs)) {
                 BIO_printf(bio_err, "MAC parameter error '%s'\n", opt);
                 ERR_print_errors(bio_err);
                 ok = 0;
@@ -129,19 +131,18 @@ opthelp:
                 break;
         }
         if (ok) {
-            params[params_n] = OSSL_PARAM_construct_end();
-            if (!EVP_MAC_CTX_set_params(ctx, params)) {
+            params = ossl_param_bld_to_param(&param_build);
+            if (params == NULL)
+                goto err;
+            ok = EVP_MAC_CTX_set_params(ctx, params);
+            ossl_param_bld_free(params);
+
+            if (!ok) {
                 BIO_printf(bio_err, "MAC parameter error\n");
                 ERR_print_errors(bio_err);
                 goto err;
             }
         }
-        for (; params_n-- > 0;) {
-            OPENSSL_free(params[params_n].data);
-        }
-        OPENSSL_free(params);
-        if (!ok)
-            goto err;
     }
 
     /* Use text mode for stdin */

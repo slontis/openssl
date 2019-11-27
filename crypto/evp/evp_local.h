@@ -221,6 +221,9 @@ EVP_KEYMGMT *evp_keymgmt_fetch_by_number(OPENSSL_CTX *ctx, int name_id,
 EVP_MD *evp_md_new(void);
 EVP_CIPHER *evp_cipher_new(void);
 
+int evp_md_cache_constants(EVP_MD *md);
+void evp_md_set_lb_digest_default_funcs(EVP_MD *md);
+
 /* Helper functions to avoid duplicating code */
 
 /*

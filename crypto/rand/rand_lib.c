@@ -852,11 +852,12 @@ int rand_priv_bytes_ex(OPENSSL_CTX *ctx, unsigned char *buf, int num)
 {
     RAND_DRBG *drbg;
     int ret;
+#ifndef FIPS_MODE
     const RAND_METHOD *meth = RAND_get_rand_method();
 
     if (meth != RAND_OpenSSL())
         return meth->bytes(buf, num);
-
+#endif /* FIPS_MODE */
     drbg = OPENSSL_CTX_get0_private_drbg(ctx);
     if (drbg == NULL)
         return 0;
@@ -874,6 +875,7 @@ int rand_bytes_ex(OPENSSL_CTX *ctx, unsigned char *buf, int num)
 {
     RAND_DRBG *drbg;
     int ret;
+#ifndef FIPS_MODE
     const RAND_METHOD *meth = RAND_get_rand_method();
 
     if (meth != RAND_OpenSSL()) {
@@ -882,7 +884,7 @@ int rand_bytes_ex(OPENSSL_CTX *ctx, unsigned char *buf, int num)
         RANDerr(RAND_F_RAND_BYTES_EX, RAND_R_FUNC_NOT_IMPLEMENTED);
         return -1;
     }
-
+#endif /* FIPS_MODE */
     drbg = OPENSSL_CTX_get0_public_drbg(ctx);
     if (drbg == NULL)
         return 0;

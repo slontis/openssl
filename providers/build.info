@@ -16,7 +16,7 @@
 #                       needed both by non-legacy and legacy code.
 #
 # libimplementations.a  Contains all non-legacy implementations.
-# liblegacy.a           Contains all legacy implementaions.
+# liblegacy.a           Contains all legacy implementations.
 #
 # libfips.a             Contains all things needed to support
 #                       FIPS implementations, such as code from
@@ -82,7 +82,7 @@ LIBS{noinst}=$LIBNONFIPS $LIBIMPLEMENTATIONS
 # with DEPEND.
 $DEFAULTGOAL=../libcrypto
 SOURCE[$DEFAULTGOAL]=$LIBIMPLEMENTATIONS $LIBNONFIPS
-SOURCE[$DEFAULTGOAL]=defltprov.c
+SOURCE[$DEFAULTGOAL]=defltprov.c legacybridgeprov.c
 # Some legacy implementations depend on provider header files
 INCLUDE[../libcrypto]=implementations/include
 
@@ -124,7 +124,7 @@ IF[{- !$disabled{legacy} -}]
   # The Legacy provider
   IF[{- $disabled{module} -}]
     # Become built in
-    # In this case, we need to do the same thing a for the default provider,
+    # In this case, we need to do the same thing as for the default provider,
     # and make the liblegacy object files end up in libcrypto.  We could also
     # just say that for the built-in legacy, we put the source directly in
     # libcrypto instead of going via liblegacy, but that makes writing the

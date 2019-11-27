@@ -108,6 +108,7 @@ DECLARE_RUN_ONCE(do_engine_lock_init)
 struct engine_st {
     const char *id;
     const char *name;
+    //const char propquery[256];
     const RSA_METHOD *rsa_meth;
     const DSA_METHOD *dsa_meth;
     const DH_METHOD *dh_meth;

@@ -82,6 +82,7 @@ extern "C" {
 #define OSSL_DIGEST_PARAM_BLOCK_SIZE "blocksize" /* size_t */
 #define OSSL_DIGEST_PARAM_SIZE       "size"      /* size_t */
 #define OSSL_DIGEST_PARAM_FLAGS      "flags"     /* ulong */
+#define OSSL_DIGEST_PARAM_LEGACY_HANDLE "legacy-handle" /* uint */
 
 /* Known DIGEST names (not a complete list) */
 #define OSSL_DIGEST_NAME_MD5 "MD5"

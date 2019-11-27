@@ -607,6 +607,11 @@ const char *EVP_MD_name(const EVP_MD *md)
 #endif
 }
 
+void EVP_MD_meth_free(EVP_MD *md)
+{
+    EVP_MD_free(md);
+}
+
 void EVP_MD_names_do_all(const EVP_MD *md,
                          void (*fn)(const char *name, void *data),
                          void *data)
@@ -620,21 +625,33 @@ const OSSL_PROVIDER *EVP_MD_provider(const EVP_MD *md)
     return md->prov;
 }
 
-int EVP_MD_block_size(const EVP_MD *md)
+
+int evp_md_cache_constants(EVP_MD *md)
 {
-    int ok;
-    size_t v = md->block_size;
-    OSSL_PARAM params[2] = { OSSL_PARAM_END, OSSL_PARAM_END };
+    int ok, n = 0;
+    ulong flags;
+    size_t blksz = 0;
+    unsigned int sz = 0, handle = 0;
+    OSSL_PARAM params[5];
 
-    if (md == NULL) {
-        EVPerr(EVP_F_EVP_MD_BLOCK_SIZE, EVP_R_MESSAGE_DIGEST_IS_NULL);
-        return -1;
-    }
+    params[n++] = OSSL_PARAM_construct_size_t(OSSL_DIGEST_PARAM_BLOCK_SIZE,
+                                              &blksz);
+    params[n++] = OSSL_PARAM_construct_uint(OSSL_DIGEST_PARAM_SIZE, &sz);
+    params[n++] = OSSL_PARAM_construct_ulong(OSSL_DIGEST_PARAM_FLAGS, &flags);
+    params[n++] = OSSL_PARAM_construct_uint(OSSL_DIGEST_PARAM_LEGACY_HANDLE,
+                                            &handle);
+    params[n] = OSSL_PARAM_construct_end();
 
-    params[0] = OSSL_PARAM_construct_size_t(OSSL_DIGEST_PARAM_BLOCK_SIZE, &v);
     ok = evp_do_md_getparams(md, params);
-
-    return ok != 0 ? (int)v : -1;
+    if (ok) {
+        md->block_size = blksz;
+        md->flags = flags;
+        md->md_size = (int)sz;
+#ifndef FIPS_MODE
+        evp_md_set_lb_digest_default_funcs(md);
+#endif
+    }
+    return ok;
 }
 
 int EVP_MD_type(const EVP_MD *md)
@@ -647,207 +664,19 @@ int EVP_MD_pkey_type(const EVP_MD *md)
     return md->pkey_type;
 }
 
+int EVP_MD_block_size(const EVP_MD *md)
+{
+    return md->block_size;
+}
+
 int EVP_MD_size(const EVP_MD *md)
 {
-    int ok;
-    size_t v = md->md_size;
-    OSSL_PARAM params[2] = { OSSL_PARAM_END, OSSL_PARAM_END };
-
-    if (md == NULL) {
-        EVPerr(EVP_F_EVP_MD_SIZE, EVP_R_MESSAGE_DIGEST_IS_NULL);
-        return -1;
-    }
-
-    params[0] = OSSL_PARAM_construct_size_t(OSSL_DIGEST_PARAM_SIZE, &v);
-    ok = evp_do_md_getparams(md, params);
-
-    return ok != 0 ? (int)v : -1;
+    return md->md_size;
 }
 
 unsigned long EVP_MD_flags(const EVP_MD *md)
 {
-    int ok;
-    unsigned long v = md->flags;
-    OSSL_PARAM params[2] = { OSSL_PARAM_END, OSSL_PARAM_END };
-
-    params[0] = OSSL_PARAM_construct_ulong(OSSL_CIPHER_PARAM_FLAGS, &v);
-    ok = evp_do_md_getparams(md, params);
-
-    return ok != 0 ? v : 0;
-}
-
-EVP_MD *EVP_MD_meth_new(int md_type, int pkey_type)
-{
-    EVP_MD *md = evp_md_new();
-
-    if (md != NULL) {
-        md->type = md_type;
-        md->pkey_type = pkey_type;
-    }
-    return md;
-}
-
-EVP_MD *EVP_MD_meth_dup(const EVP_MD *md)
-{
-    EVP_MD *to = NULL;
-
-    /*
-     * Non-legacy EVP_MDs can't be duplicated like this.
-     * Use EVP_MD_up_ref() instead.
-     */
-    if (md->prov != NULL)
-        return NULL;
-
-    if ((to = EVP_MD_meth_new(md->type, md->pkey_type)) != NULL) {
-        CRYPTO_RWLOCK *lock = to->lock;
-
-        memcpy(to, md, sizeof(*to));
-        to->lock = lock;
-    }
-    return to;
-}
-
-void EVP_MD_meth_free(EVP_MD *md)
-{
-    EVP_MD_free(md);
-}
-int EVP_MD_meth_set_input_blocksize(EVP_MD *md, int blocksize)
-{
-    if (md->block_size != 0)
-        return 0;
-
-    md->block_size = blocksize;
-    return 1;
-}
-int EVP_MD_meth_set_result_size(EVP_MD *md, int resultsize)
-{
-    if (md->md_size != 0)
-        return 0;
-
-    md->md_size = resultsize;
-    return 1;
-}
-int EVP_MD_meth_set_app_datasize(EVP_MD *md, int datasize)
-{
-    if (md->ctx_size != 0)
-        return 0;
-
-    md->ctx_size = datasize;
-    return 1;
-}
-int EVP_MD_meth_set_flags(EVP_MD *md, unsigned long flags)
-{
-    if (md->flags != 0)
-        return 0;
-
-    md->flags = flags;
-    return 1;
-}
-int EVP_MD_meth_set_init(EVP_MD *md, int (*init)(EVP_MD_CTX *ctx))
-{
-    if (md->init != NULL)
-        return 0;
-
-    md->init = init;
-    return 1;
-}
-int EVP_MD_meth_set_update(EVP_MD *md, int (*update)(EVP_MD_CTX *ctx,
-                                                     const void *data,
-                                                     size_t count))
-{
-    if (md->update != NULL)
-        return 0;
-
-    md->update = update;
-    return 1;
-}
-int EVP_MD_meth_set_final(EVP_MD *md, int (*final)(EVP_MD_CTX *ctx,
-                                                   unsigned char *md))
-{
-    if (md->final != NULL)
-        return 0;
-
-    md->final = final;
-    return 1;
-}
-int EVP_MD_meth_set_copy(EVP_MD *md, int (*copy)(EVP_MD_CTX *to,
-                                                 const EVP_MD_CTX *from))
-{
-    if (md->copy != NULL)
-        return 0;
-
-    md->copy = copy;
-    return 1;
-}
-int EVP_MD_meth_set_cleanup(EVP_MD *md, int (*cleanup)(EVP_MD_CTX *ctx))
-{
-    if (md->cleanup != NULL)
-        return 0;
-
-    md->cleanup = cleanup;
-    return 1;
-}
-int EVP_MD_meth_set_ctrl(EVP_MD *md, int (*ctrl)(EVP_MD_CTX *ctx, int cmd,
-                                                 int p1, void *p2))
-{
-    if (md->md_ctrl != NULL)
-        return 0;
-
-    md->md_ctrl = ctrl;
-    return 1;
-}
-
-int EVP_MD_meth_get_input_blocksize(const EVP_MD *md)
-{
-    return md->block_size;
-}
-int EVP_MD_meth_get_result_size(const EVP_MD *md)
-{
-    return md->md_size;
-}
-int EVP_MD_meth_get_app_datasize(const EVP_MD *md)
-{
-    return md->ctx_size;
-}
-unsigned long EVP_MD_meth_get_flags(const EVP_MD *md)
-{
     return md->flags;
-}
-int (*EVP_MD_meth_get_init(const EVP_MD *md))(EVP_MD_CTX *ctx)
-{
-    return md->init;
-}
-int (*EVP_MD_meth_get_update(const EVP_MD *md))(EVP_MD_CTX *ctx,
-                                                const void *data,
-                                                size_t count)
-{
-    return md->update;
-}
-int (*EVP_MD_meth_get_final(const EVP_MD *md))(EVP_MD_CTX *ctx,
-                                               unsigned char *md)
-{
-    return md->final;
-}
-int (*EVP_MD_meth_get_copy(const EVP_MD *md))(EVP_MD_CTX *to,
-                                              const EVP_MD_CTX *from)
-{
-    return md->copy;
-}
-int (*EVP_MD_meth_get_cleanup(const EVP_MD *md))(EVP_MD_CTX *ctx)
-{
-    return md->cleanup;
-}
-int (*EVP_MD_meth_get_ctrl(const EVP_MD *md))(EVP_MD_CTX *ctx, int cmd,
-                                              int p1, void *p2)
-{
-    return md->md_ctrl;
-}
-
-const EVP_MD *EVP_MD_CTX_md(const EVP_MD_CTX *ctx)
-{
-    if (ctx == NULL)
-        return NULL;
-    return ctx->reqdigest;
 }
 
 EVP_PKEY_CTX *EVP_MD_CTX_pkey_ctx(const EVP_MD_CTX *ctx)
@@ -880,6 +709,12 @@ void EVP_MD_CTX_set_pkey_ctx(EVP_MD_CTX *ctx, EVP_PKEY_CTX *pctx)
 void *EVP_MD_CTX_md_data(const EVP_MD_CTX *ctx)
 {
     return ctx->md_data;
+}
+const EVP_MD *EVP_MD_CTX_md(const EVP_MD_CTX *ctx)
+{
+    if (ctx == NULL)
+        return NULL;
+    return ctx->reqdigest;
 }
 
 int (*EVP_MD_CTX_update_fn(EVP_MD_CTX *ctx))(EVP_MD_CTX *ctx,

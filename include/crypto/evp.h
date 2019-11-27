@@ -206,6 +206,7 @@ struct evp_md_st {
 
     /* New structure members */
     /* TODO(3.0): Remove above comment when legacy has gone */
+    int has_legacybridge;
     int name_id;
     OSSL_PROVIDER *prov;
     CRYPTO_REF_COUNT refcnt;

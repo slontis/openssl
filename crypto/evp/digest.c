@@ -18,6 +18,53 @@
 #include "internal/provider.h"
 #include "evp_local.h"
 
+#ifndef FIPS_MODE
+/*
+ * The engine is only needed to get to the digest methods - so finish straight
+ * after.
+ * Note that this does not return the cached 'default' engine
+ * so it would have to be fetched again (if you copy the ctx).
+ *
+ * This is a placeholder to get things working.
+ * Ideally we would instead fetch using the engines id and put it in the
+ * property query as something like "engine=true,engineid=XX". If engine is NULL
+ * but there is a default engine then that would need to be returned.
+ * A seperate fetch to get the default would be needed if the property system
+ * does not support priorities. i.e- A default engine digest needs to be returned
+ * if it exists, not the default provider digest.
+ */
+static EVP_MD *engine_evp_md_fetch(int nid, ENGINE *e)
+{
+    EVP_MD *ret = NULL;
+    const EVP_MD *md = NULL;
+
+    /* Get the default engine for this digest algorithm if no engine is set */
+    if (e == NULL)
+        e = ENGINE_get_digest_engine(nid);
+    if (e != NULL) {
+        ENGINE_init(e);
+        md = ENGINE_get_digest(e, nid);
+        if (md != NULL) {
+            ret = EVP_MD_meth_dup(md);
+            if (ret) {
+                /*
+                 * These wouldnt be returned here if the fetch is done via the
+                 * legacy bridge provider. Instead the provider would need to
+                 * keep track of these. We may need a handle so we know which
+                 * one to look for.
+                 */
+                ret->init = md->init;
+                ret->update = md->update;
+                ret->final = md->final;
+                ret->md_ctrl = md->md_ctrl;
+            }
+        }
+        ENGINE_finish(e);
+    }
+    return ret;
+}
+#endif
+
 /* This call frees resources associated with the context */
 int EVP_MD_CTX_reset(EVP_MD_CTX *ctx)
 {
@@ -34,17 +81,14 @@ int EVP_MD_CTX_reset(EVP_MD_CTX *ctx)
         EVP_PKEY_CTX_free(ctx->pctx);
 #endif
 
-    EVP_MD_free(ctx->fetched_digest);
-    ctx->fetched_digest = NULL;
-    ctx->reqdigest = NULL;
-
-    if (ctx->provctx != NULL) {
+    if (ctx->provctx != NULL && ctx->digest != NULL) {
         if (ctx->digest->freectx != NULL)
             ctx->digest->freectx(ctx->provctx);
         ctx->provctx = NULL;
         EVP_MD_CTX_set_flags(ctx, EVP_MD_CTX_FLAG_CLEANED);
     }
 
+#if 0
     /* TODO(3.0): Remove legacy code below */
 
     /*
@@ -58,10 +102,16 @@ int EVP_MD_CTX_reset(EVP_MD_CTX *ctx)
         && !EVP_MD_CTX_test_flags(ctx, EVP_MD_CTX_FLAG_REUSE)) {
         OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
     }
+#endif
+    EVP_MD_free(ctx->fetched_digest);
+    ctx->fetched_digest = NULL;
+    ctx->reqdigest = NULL;
 
+/*
 #if !defined(FIPS_MODE) && !defined(OPENSSL_NO_ENGINE)
     ENGINE_finish(ctx->engine);
 #endif
+*/
 
     /* TODO(3.0): End of legacy code */
 
@@ -94,10 +144,11 @@ int EVP_DigestInit(EVP_MD_CTX *ctx, const EVP_MD *type)
 
 int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
 {
+#if 0
 #if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
     ENGINE *tmpimpl = NULL;
 #endif
-
+#endif
     EVP_MD_CTX_clear_flags(ctx, EVP_MD_CTX_FLAG_CLEANED);
 
     if (ctx->provctx != NULL) {
@@ -110,8 +161,11 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         ctx->provctx = NULL;
     }
 
-    if (type != NULL)
+    if (type != NULL) {
         ctx->reqdigest = type;
+        ctx->engine = impl;
+    }
+#if 0
 
     /* TODO(3.0): Legacy work around code below. Remove this */
 #if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
@@ -155,6 +209,16 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         ctx->fetched_digest = NULL;
         goto legacy;
     }
+#endif /* 0 */
+
+    /* How do we remove this -if there is no legacy path ?? */
+    if ((ctx->flags & EVP_MD_CTX_FLAG_NO_INIT) != 0) {
+        if (ctx->digest == ctx->fetched_digest)
+            ctx->digest = NULL;
+        EVP_MD_free(ctx->fetched_digest);
+        ctx->fetched_digest = NULL;
+        goto legacy;
+    }
 
     if (ctx->digest != NULL && ctx->digest->ctx_size > 0) {
         OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
@@ -169,7 +233,12 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         EVPerr(EVP_F_EVP_DIGESTINIT_EX, EVP_R_INITIALIZATION_ERROR);
         return 0;
 #else
-        EVP_MD *provmd = EVP_MD_fetch(NULL, OBJ_nid2sn(type->type), "");
+        EVP_MD *provmd = NULL;
+
+        /* try an engine fetch first */
+        provmd = engine_evp_md_fetch(type->type, ctx->engine);
+        if (provmd == NULL)
+            provmd = EVP_MD_fetch(NULL, OBJ_nid2sn(type->type), "");
 
         if (provmd == NULL) {
             EVPerr(EVP_F_EVP_DIGESTINIT_EX, EVP_R_INITIALIZATION_ERROR);
@@ -188,7 +257,7 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
     }
     ctx->digest = type;
     if (ctx->provctx == NULL) {
-        ctx->provctx = ctx->digest->newctx(ossl_provider_ctx(type->prov));
+        ctx->provctx = ctx->digest->newctx(type->has_legacybridge ? (void *)type : ossl_provider_ctx(type->prov));
         if (ctx->provctx == NULL) {
             EVPerr(EVP_F_EVP_DIGESTINIT_EX, EVP_R_INITIALIZATION_ERROR);
             return 0;
@@ -201,9 +270,10 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
     }
 
     return ctx->digest->dinit(ctx->provctx);
-
     /* TODO(3.0): Remove legacy code below */
  legacy:
+#if 0
+
 
 #if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
     if (type) {
@@ -242,6 +312,7 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         type = ctx->digest;
     }
 #endif
+#endif
     if (ctx->digest != type) {
         if (ctx->digest && ctx->digest->ctx_size) {
             OPENSSL_clear_free(ctx->md_data, ctx->digest->ctx_size);
@@ -258,7 +329,7 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *impl)
         }
     }
 #if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
- skip_to_init:
+ //skip_to_init:
 #endif
 #ifndef FIPS_MODE
     /*
@@ -868,12 +939,18 @@ static void evp_md_free(void *md)
     EVP_MD_free(md);
 }
 
+
 EVP_MD *EVP_MD_fetch(OPENSSL_CTX *ctx, const char *algorithm,
                      const char *properties)
 {
     EVP_MD *md =
         evp_generic_fetch(ctx, OSSL_OP_DIGEST, algorithm, properties,
                           evp_md_from_dispatch, evp_md_up_ref, evp_md_free);
+
+    if (md != NULL && !evp_md_cache_constants(md)) {
+        EVP_MD_free(md);
+        md = NULL;
+    }
 
     return md;
 }

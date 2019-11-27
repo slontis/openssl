@@ -26,6 +26,11 @@ DEFINE_RUN_ONCE(do_engine_lock_init)
     return global_engine_lock != NULL;
 }
 
+//const char *engine_get_property_query(ENGINE *e)
+//{
+//    return e->propquery;
+//}
+
 ENGINE *ENGINE_new(void)
 {
     ENGINE *ret;
@@ -41,6 +46,7 @@ ENGINE *ENGINE_new(void)
         OPENSSL_free(ret);
         return NULL;
     }
+    //BIO_snprintf(ret->propquery, sizeof(ret->propquery), "engine=true");
     return ret;
 }
 
@@ -197,6 +203,8 @@ int ENGINE_set_id(ENGINE *e, const char *id)
         return 0;
     }
     e->id = id;
+//    BIO_snprintf(e->propquery, sizeof(e->propquery),
+//                 "engine=true, engineid=%s", id);
     return 1;
 }
 

@@ -1,0 +1,46 @@
+Initial implementation just uses a evp_md_fetch(nid, engine) to optionally grab
+a MD* from either a default engine or use the specified engine... (using legacy init,update,final).
+The provider is currently just a dummy..
+The user can get functions via EVP_MD_METH_get_XXX() and call them directly.
+So the legacy const *EVP_MD structure need to return something here - for this reason there
+are stubs that call the providers dispatch functions.
+(To do this they fetch a provider method from the default provider for the given algorithm)..
+So we may need a flag to indicate const EVP_MD's.
+Engines use either EVP_MD_METH_new() or EVP_MD_METH_dup() before setting any values.
+The constants (md_size) etc should just work as is. The dup and new need to setup
+legacy_bridge_stubs that map from the providers methods to the legacy methods..
+
+How well does the mapping work when its not 1-1? e.g:  cleanup doesnt really map..
+
+Can we make EVP_MD_fetch() work for engines, and return algorithms from the
+legacybridgeprovider??
+
+The algorithms would be dynamic and non cached.
+Building the list of algorithms each time would be slow - since the algorithm is
+not passed into the provider - we need to build a complete list for all digests
+for all engines.
+For default engines the algorithm would need to be returned and it would need
+to be the one selected over any others. We would need some form of priority
+system to make this happen.
+
+Passing the legacy functions back over the provider boundary is problematic.
+So can we just resolve the new provider stubs and make them call legacy functions
+hidden in a provider.
+
+Because the stub functions need access to EVP_MD_CTX and EVP_MD these headers
+(local) would need to be included.
+
+EVP_MD_METH_get_init(MD *) has some interesting problems with this approach..
+We want to return a function stub here. How does it go over the provider boundary.
+Could these functions actually sit inside the legacybridge provider??
+There would need to be an entry for the default case so that EVP_MD_METH_get_XXX()
+would work for a const EVP_MD object.
+
+The passed in engine pointer can not disappear completely. If we are trying to
+do a fetch it would need at least a query string e.g: "engine=true,engineid=idofengine"
+MD*/engine* can be passed as NULL to the DigestInitex() which then reuses the
+previous engine* make this difficult. Copy_ctx would also need to copy this pointer..
+
+I think the complexity of the implementation is likely to break subtle things
+in the code.
+Considering EVP_MD is the simplest one this is a bit concerning.

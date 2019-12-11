@@ -17,11 +17,19 @@
 #include "crypto/bn.h"
 #include "crypto/evp.h"
 #include "crypto/rsa.h"
+#include "prov/provider_ctx.h"
 #include "rsa_local.h"
+
+static RSA *rsa_new_method(OPENSSL_CTX *libctx, ENGINE *engine);
+
+RSA *rsa_new(OPENSSL_CTX *libctx)
+{
+    return rsa_new_method(libctx, NULL);
+}
 
 RSA *RSA_new(void)
 {
-    return RSA_new_method(NULL);
+    return rsa_new_method(NULL, NULL);
 }
 
 const RSA_METHOD *RSA_get_method(const RSA *rsa)
@@ -49,7 +57,7 @@ int RSA_set_method(RSA *rsa, const RSA_METHOD *meth)
     return 1;
 }
 
-RSA *RSA_new_method(ENGINE *engine)
+static RSA *rsa_new_method(OPENSSL_CTX *libctx, ENGINE *engine)
 {
     RSA *ret = OPENSSL_zalloc(sizeof(*ret));
 
@@ -88,9 +96,8 @@ RSA *RSA_new_method(ENGINE *engine)
 #endif
 
     ret->flags = ret->meth->flags & ~RSA_FLAG_NON_FIPS_ALLOW;
-    if (!CRYPTO_new_ex_data(CRYPTO_EX_INDEX_RSA, ret, &ret->ex_data)) {
+    if (!crypto_new_ex_data_ex(libctx, CRYPTO_EX_INDEX_RSA, ret, &ret->ex_data))
         goto err;
-    }
 
     if ((ret->meth->init != NULL) && !ret->meth->init(ret)) {
         RSAerr(RSA_F_RSA_NEW_METHOD, ERR_R_INIT_FAIL);
@@ -102,6 +109,11 @@ RSA *RSA_new_method(ENGINE *engine)
  err:
     RSA_free(ret);
     return NULL;
+}
+
+RSA *RSA_new_method(ENGINE *engine)
+{
+    return rsa_new_method(NULL, engine);
 }
 
 void RSA_free(RSA *r)

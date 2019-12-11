@@ -28,7 +28,76 @@
 #include "crypto/evp.h"
 #include "internal/provider.h"
 
-static void EVP_PKEY_free_it(EVP_PKEY *x);
+EVP_PKEY *EVP_PKEY_new(void)
+{
+    EVP_PKEY *ret = OPENSSL_zalloc(sizeof(*ret));
+
+    if (ret == NULL) {
+        EVPerr(EVP_F_EVP_PKEY_NEW, ERR_R_MALLOC_FAILURE);
+        return NULL;
+    }
+    ret->type = EVP_PKEY_NONE;
+    ret->save_type = EVP_PKEY_NONE;
+    ret->references = 1;
+    ret->save_parameters = 1;
+    ret->lock = CRYPTO_THREAD_lock_new();
+    if (ret->lock == NULL) {
+        EVPerr(EVP_F_EVP_PKEY_NEW, ERR_R_MALLOC_FAILURE);
+        OPENSSL_free(ret);
+        return NULL;
+    }
+    return ret;
+}
+
+int EVP_PKEY_up_ref(EVP_PKEY *pkey)
+{
+    int i;
+
+    if (CRYPTO_UP_REF(&pkey->references, &i, pkey->lock) <= 0)
+        return 0;
+
+    REF_PRINT_COUNT("EVP_PKEY", pkey);
+    REF_ASSERT_ISNT(i < 2);
+    return ((i > 1) ? 1 : 0);
+}
+
+static void EVP_PKEY_free_it(EVP_PKEY *x)
+{
+    /* internal function; x is never NULL */
+
+    evp_keymgmt_clear_pkey_cache(x);
+
+    if (x->ameth && x->ameth->pkey_free) {
+        x->ameth->pkey_free(x);
+        x->pkey.ptr = NULL;
+    }
+#if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
+    ENGINE_finish(x->engine);
+    x->engine = NULL;
+    ENGINE_finish(x->pmeth_engine);
+    x->pmeth_engine = NULL;
+#endif
+}
+
+void EVP_PKEY_free(EVP_PKEY *x)
+{
+    int i;
+
+    if (x == NULL)
+        return;
+
+    CRYPTO_DOWN_REF(&x->references, &i, x->lock);
+    REF_PRINT_COUNT("EVP_PKEY", x);
+    if (i > 0)
+        return;
+    REF_ASSERT_ISNT(i < 0);
+    EVP_PKEY_free_it(x);
+    CRYPTO_THREAD_lock_free(x->lock);
+#ifndef FIPS_MODE
+    sk_X509_ATTRIBUTE_pop_free(x->attributes, X509_ATTRIBUTE_free);
+#endif
+    OPENSSL_free(x);
+}
 
 int EVP_PKEY_bits(const EVP_PKEY *pkey)
 {
@@ -52,6 +121,8 @@ int EVP_PKEY_size(const EVP_PKEY *pkey)
         return pkey->ameth->pkey_size(pkey);
     return 0;
 }
+
+#ifndef FIPS_MODE
 
 int EVP_PKEY_save_parameters(EVP_PKEY *pkey, int mode)
 {
@@ -141,38 +212,6 @@ int EVP_PKEY_cmp(const EVP_PKEY *a, const EVP_PKEY *b)
     return -2;
 }
 
-EVP_PKEY *EVP_PKEY_new(void)
-{
-    EVP_PKEY *ret = OPENSSL_zalloc(sizeof(*ret));
-
-    if (ret == NULL) {
-        EVPerr(EVP_F_EVP_PKEY_NEW, ERR_R_MALLOC_FAILURE);
-        return NULL;
-    }
-    ret->type = EVP_PKEY_NONE;
-    ret->save_type = EVP_PKEY_NONE;
-    ret->references = 1;
-    ret->save_parameters = 1;
-    ret->lock = CRYPTO_THREAD_lock_new();
-    if (ret->lock == NULL) {
-        EVPerr(EVP_F_EVP_PKEY_NEW, ERR_R_MALLOC_FAILURE);
-        OPENSSL_free(ret);
-        return NULL;
-    }
-    return ret;
-}
-
-int EVP_PKEY_up_ref(EVP_PKEY *pkey)
-{
-    int i;
-
-    if (CRYPTO_UP_REF(&pkey->references, &i, pkey->lock) <= 0)
-        return 0;
-
-    REF_PRINT_COUNT("EVP_PKEY", pkey);
-    REF_ASSERT_ISNT(i < 2);
-    return ((i > 1) ? 1 : 0);
-}
 
 /*
  * Setup a public key ASN1 method and ENGINE from a NID or a string. If pkey
@@ -619,41 +658,7 @@ int EVP_PKEY_base_id(const EVP_PKEY *pkey)
     return EVP_PKEY_type(pkey->type);
 }
 
-void EVP_PKEY_free(EVP_PKEY *x)
-{
-    int i;
 
-    if (x == NULL)
-        return;
-
-    CRYPTO_DOWN_REF(&x->references, &i, x->lock);
-    REF_PRINT_COUNT("EVP_PKEY", x);
-    if (i > 0)
-        return;
-    REF_ASSERT_ISNT(i < 0);
-    EVP_PKEY_free_it(x);
-    CRYPTO_THREAD_lock_free(x->lock);
-    sk_X509_ATTRIBUTE_pop_free(x->attributes, X509_ATTRIBUTE_free);
-    OPENSSL_free(x);
-}
-
-static void EVP_PKEY_free_it(EVP_PKEY *x)
-{
-    /* internal function; x is never NULL */
-
-    evp_keymgmt_clear_pkey_cache(x);
-
-    if (x->ameth && x->ameth->pkey_free) {
-        x->ameth->pkey_free(x);
-        x->pkey.ptr = NULL;
-    }
-#ifndef OPENSSL_NO_ENGINE
-    ENGINE_finish(x->engine);
-    x->engine = NULL;
-    ENGINE_finish(x->pmeth_engine);
-    x->pmeth_engine = NULL;
-#endif
-}
 
 static int unsup_alg(BIO *out, const EVP_PKEY *pkey, int indent,
                      const char *kstr)
@@ -778,3 +783,4 @@ size_t EVP_PKEY_get1_tls_encodedpoint(EVP_PKEY *pkey, unsigned char **ppt)
         return 0;
     return rv;
 }
+#endif /* FIPS_MODE */

@@ -172,10 +172,10 @@ int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx)
 
     evp_pkey_ctx_free_old_ops(ctx);
     ctx->operation = EVP_PKEY_OP_DERIVE;
-
+#ifndef FIPS_MODE
     if (ctx->engine != NULL || ctx->algorithm == NULL)
         goto legacy;
-
+#endif
     /*
      * Because we cleared out old ops, we shouldn't need to worry about
      * checking if exchange is already there.  Keymgmt is a different
@@ -188,7 +188,7 @@ int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx)
         ctx->keymgmt =
             evp_keymgmt_fetch_by_number(ctx->libctx, name_id, ctx->propquery);
     }
-
+#ifndef FIPS_MODE
     if (ctx->keymgmt == NULL
         || exchange == NULL
         || (EVP_KEYMGMT_provider(ctx->keymgmt)
@@ -202,7 +202,7 @@ int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx)
         EVP_KEYEXCH_free(exchange);
         goto legacy;
     }
-
+#endif
 
     ctx->op.kex.exchange = exchange;
 
@@ -225,7 +225,7 @@ int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx)
  err:
     ctx->operation = EVP_PKEY_OP_UNDEFINED;
     return 0;
-
+#ifndef FIPS_MODE
  legacy:
     if (ctx == NULL || ctx->pmeth == NULL || ctx->pmeth->derive == NULL) {
         EVPerr(0, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
@@ -238,11 +238,14 @@ int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx)
     if (ret <= 0)
         ctx->operation = EVP_PKEY_OP_UNDEFINED;
     return ret;
+#endif
 }
 
 int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
 {
+#ifndef FIPS_MODE
     int ret;
+#endif
     void *provkey = NULL;
 
     if (ctx == NULL) {
@@ -250,10 +253,10 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
                EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
         return -2;
     }
-
+#ifndef FIPS_MODE
     if (!EVP_PKEY_CTX_IS_DERIVE_OP(ctx) || ctx->op.kex.exchprovctx == NULL)
         goto legacy;
-
+#endif
     if (ctx->op.kex.exchange->set_peer == NULL) {
         EVPerr(EVP_F_EVP_PKEY_DERIVE_SET_PEER,
                EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
@@ -266,7 +269,7 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
         return 0;
     }
     return ctx->op.kex.exchange->set_peer(ctx->op.kex.exchprovctx, provkey);
-
+#ifndef FIPS_MODE
  legacy:
     if (ctx->pmeth == NULL
         || !(ctx->pmeth->derive != NULL
@@ -328,6 +331,7 @@ int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer)
 
     EVP_PKEY_up_ref(peer);
     return 1;
+#endif
 }
 
 int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *pkeylen)
@@ -344,14 +348,15 @@ int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *pkeylen)
         EVPerr(EVP_F_EVP_PKEY_DERIVE, EVP_R_OPERATON_NOT_INITIALIZED);
         return -1;
     }
-
+#ifdef FIPS_MODE
     if (ctx->op.kex.exchprovctx == NULL)
         goto legacy;
-
+#endif
     ret = ctx->op.kex.exchange->derive(ctx->op.kex.exchprovctx, key, pkeylen,
                                        SIZE_MAX);
 
     return ret;
+#ifdef FIPS_MODE
  legacy:
     if (ctx ==  NULL || ctx->pmeth == NULL || ctx->pmeth->derive == NULL) {
         EVPerr(EVP_F_EVP_PKEY_DERIVE,
@@ -361,6 +366,7 @@ int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *pkeylen)
 
     M_check_autoarg(ctx, key, pkeylen, EVP_F_EVP_PKEY_DERIVE)
         return ctx->pmeth->derive(ctx, key, pkeylen);
+#endif
 }
 
 int EVP_KEYEXCH_number(const EVP_KEYEXCH *keyexch)

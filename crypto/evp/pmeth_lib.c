@@ -23,6 +23,7 @@
 #include "internal/provider.h"
 #include "evp_local.h"
 
+#ifndef FIPS_MODE
 typedef const EVP_PKEY_METHOD *(*pmeth_fn)(void);
 typedef int sk_cmp_fn_type(const char *const *a, const char *const *b);
 
@@ -111,6 +112,7 @@ const EVP_PKEY_METHOD *EVP_PKEY_meth_find(int type)
         return NULL;
     return (**ret)();
 }
+#endif /* FIPS_MODE */
 
 static EVP_PKEY_CTX *int_ctx_new(OPENSSL_CTX *libctx,
                                  EVP_PKEY *pkey, ENGINE *e,
@@ -120,10 +122,13 @@ static EVP_PKEY_CTX *int_ctx_new(OPENSSL_CTX *libctx,
     EVP_PKEY_CTX *ret;
     const EVP_PKEY_METHOD *pmeth = NULL;
 
+#ifndef FIPS_MODE
     /*
      * When using providers, the context is bound to the algo implementation
      * later.
      */
+    if (pkey != NULL && pkey->pkeys[0].keymgmt != NULL)
+        goto common;
     if (pkey == NULL && e == NULL && id == -1)
         goto common;
 
@@ -193,11 +198,12 @@ static EVP_PKEY_CTX *int_ctx_new(OPENSSL_CTX *libctx,
         return NULL;
     }
     /* END legacy */
-
  common:
+#endif /* FIPS_MODE */
+
     ret = OPENSSL_zalloc(sizeof(*ret));
     if (ret == NULL) {
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
         ENGINE_finish(e);
 #endif
         EVPerr(EVP_F_INT_CTX_NEW, ERR_R_MALLOC_FAILURE);
@@ -246,6 +252,8 @@ void evp_pkey_ctx_free_old_ops(EVP_PKEY_CTX *ctx)
         ctx->op.ciph.cipher = NULL;
     }
 }
+
+#ifndef FIPS_MODE
 
 EVP_PKEY_METHOD *EVP_PKEY_meth_new(int id, int flags)
 {
@@ -320,6 +328,8 @@ void EVP_PKEY_meth_free(EVP_PKEY_METHOD *pmeth)
         OPENSSL_free(pmeth);
 }
 
+#endif /* FIPS_MODE */
+
 EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e)
 {
     return int_ctx_new(NULL, pkey, e, NULL, NULL, -1);
@@ -337,6 +347,8 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_new_provided(OPENSSL_CTX *libctx,
     return int_ctx_new(libctx, NULL, NULL, name, propquery, -1);
 }
 
+#ifndef FIPS_MODE
+
 EVP_PKEY_CTX *EVP_PKEY_CTX_dup(const EVP_PKEY_CTX *pctx)
 {
     EVP_PKEY_CTX *rctx;
@@ -347,7 +359,7 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_dup(const EVP_PKEY_CTX *pctx)
                 || (EVP_PKEY_CTX_IS_SIGNATURE_OP(pctx)
                     && pctx->op.sig.sigprovctx == NULL)))
         return NULL;
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
     /* Make sure it's safe to copy a pkey context using an ENGINE */
     if (pctx->engine && !ENGINE_init(pctx->engine)) {
         EVPerr(EVP_F_EVP_PKEY_CTX_DUP, ERR_R_ENGINE_LIB);
@@ -431,7 +443,7 @@ EVP_PKEY_CTX *EVP_PKEY_CTX_dup(const EVP_PKEY_CTX *pctx)
     }
 
     rctx->pmeth = pctx->pmeth;
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
     rctx->engine = pctx->engine;
 #endif
 
@@ -501,6 +513,8 @@ const EVP_PKEY_METHOD *EVP_PKEY_meth_get0(size_t idx)
     return sk_EVP_PKEY_METHOD_value(app_pkey_methods, idx);
 }
 
+#endif /* FIPS_MODE */
+
 void EVP_PKEY_CTX_free(EVP_PKEY_CTX *ctx)
 {
     if (ctx == NULL)
@@ -513,7 +527,7 @@ void EVP_PKEY_CTX_free(EVP_PKEY_CTX *ctx)
 
     EVP_PKEY_free(ctx->pkey);
     EVP_PKEY_free(ctx->peerkey);
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(OPENSSL_NO_ENGINE) && !defined(FIPS_MODE)
     ENGINE_finish(ctx->engine);
 #endif
     OPENSSL_free(ctx);
@@ -616,6 +630,8 @@ int EVP_PKEY_CTX_set_dh_pad(EVP_PKEY_CTX *ctx, int pad)
 }
 #endif
 
+#ifndef FIPS_MODE
+
 int EVP_PKEY_CTX_get_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD **md)
 {
     OSSL_PARAM sig_md_params[3], *p = sig_md_params;
@@ -690,6 +706,8 @@ int EVP_PKEY_CTX_set_signature_md(EVP_PKEY_CTX *ctx, const EVP_MD *md)
     return EVP_PKEY_CTX_set_params(ctx, sig_md_params);
 }
 
+#endif
+
 static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,
                                 int cmd, int p1, void *p2)
 {
@@ -698,6 +716,7 @@ static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,
     case EVP_PKEY_CTRL_DH_PAD:
         return EVP_PKEY_CTX_set_dh_pad(ctx, p1);
 #endif
+#ifndef FIPS_MODE
     case EVP_PKEY_CTRL_MD:
         return EVP_PKEY_CTX_set_signature_md(ctx, p2);
     case EVP_PKEY_CTRL_GET_MD:
@@ -729,6 +748,7 @@ static int legacy_ctrl_to_param(EVP_PKEY_CTX *ctx, int keytype, int optype,
         ERR_raise(ERR_LIB_EVP,
                   EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
         return -2;
+#endif
     }
     return 0;
 }
@@ -785,6 +805,8 @@ int EVP_PKEY_CTX_ctrl_uint64(EVP_PKEY_CTX *ctx, int keytype, int optype,
 {
     return EVP_PKEY_CTX_ctrl(ctx, keytype, optype, cmd, 0, &value);
 }
+
+#ifndef FIPS_MODE
 
 static int legacy_ctrl_str_to_param(EVP_PKEY_CTX *ctx, const char *name,
                                     const char *value)
@@ -1363,3 +1385,5 @@ void EVP_PKEY_meth_get_digest_custom(EVP_PKEY_METHOD *pmeth,
     if (pdigest_custom != NULL)
         *pdigest_custom = pmeth->digest_custom;
 }
+
+#endif /* FIPS_MODE */

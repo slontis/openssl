@@ -92,8 +92,13 @@ err:
 static int test_fromdata_rsa(void)
 {
     int ret = 0;
-    EVP_PKEY_CTX *ctx = NULL;
+    EVP_PKEY_CTX *ctx = NULL, *ectx = NULL;
     EVP_PKEY *pk = NULL;
+    uint8_t ciphertext[128];
+    size_t ctext_len = sizeof(ciphertext);
+    uint8_t plaintext[8];
+    size_t ptext_len = sizeof(plaintext);
+    static const unsigned char msg[] = { 1, 2, 3, 4 };
     /*
      * 32-bit RSA key, extracted from this command,
      * executed with OpenSSL 1.0.2:
@@ -129,12 +134,28 @@ static int test_fromdata_rsa(void)
         || !TEST_true(EVP_PKEY_fromdata(ctx, &pk, fromdata_params)))
         goto err;
 
+    if (!TEST_ptr(ectx = EVP_PKEY_CTX_new(pk, NULL)))
+        goto err;
+
+    if (!TEST_true(EVP_PKEY_encrypt_init(ectx)))
+        goto err;
+
+    if (!TEST_true(EVP_PKEY_encrypt(ectx, ciphertext, &ctext_len, msg, sizeof(msg))))
+        goto err;
+
+    if (!TEST_true(EVP_PKEY_decrypt_init(ectx)))
+        goto err;
+
+    if (!TEST_true(EVP_PKEY_decrypt(ectx, plaintext, &ptext_len, ciphertext, ctext_len)))
+        goto err;
+
     ret = test_print_key_using_pem(pk)
         | test_print_key_using_serializer(pk);
 
  err:
     EVP_PKEY_free(pk);
     EVP_PKEY_CTX_free(ctx);
+    EVP_PKEY_CTX_free(ectx);
 
     return ret;
 }

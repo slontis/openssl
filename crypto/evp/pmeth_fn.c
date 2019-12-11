@@ -583,8 +583,10 @@ static int evp_pkey_asym_cipher_init(EVP_PKEY_CTX *ctx, int operation)
     evp_pkey_ctx_free_old_ops(ctx);
     ctx->operation = operation;
 
+#ifndef FIPS_MODE
     if (ctx->algorithm == NULL || ctx->engine != NULL)
         goto legacy;
+#endif
 
     /*
      * Because we cleared out old ops, we shouldn't need to worry about
@@ -598,7 +600,7 @@ static int evp_pkey_asym_cipher_init(EVP_PKEY_CTX *ctx, int operation)
         ctx->keymgmt =
             evp_keymgmt_fetch_by_number(ctx->libctx, name_id, ctx->propquery);
     }
-
+#ifndef FIPS_MODE
     if (ctx->keymgmt == NULL
         || cipher == NULL
         || (EVP_KEYMGMT_provider(ctx->keymgmt)
@@ -612,6 +614,7 @@ static int evp_pkey_asym_cipher_init(EVP_PKEY_CTX *ctx, int operation)
         EVP_ASYM_CIPHER_free(cipher);
         goto legacy;
     }
+#endif
 
     ctx->op.ciph.cipher = cipher;
 
@@ -657,7 +660,7 @@ static int evp_pkey_asym_cipher_init(EVP_PKEY_CTX *ctx, int operation)
         goto err;
     }
     return 1;
-
+#ifndef FIPS_MODE
  legacy:
     if (ctx->pmeth == NULL || ctx->pmeth->encrypt == NULL) {
         EVPerr(0, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
@@ -678,7 +681,7 @@ static int evp_pkey_asym_cipher_init(EVP_PKEY_CTX *ctx, int operation)
         EVPerr(0, EVP_R_INITIALIZATION_ERROR);
         ret = -1;
     }
-
+#endif
  err:
     if (ret <= 0)
         ctx->operation = EVP_PKEY_OP_UNDEFINED;

@@ -12,6 +12,8 @@
 
 #include <openssl/rsa.h>
 
+RSA *rsa_new(OPENSSL_CTX *libctx);
+
 int rsa_generate_key_int(OPENSSL_CTX *libctx, RSA *rsa, int bits, int primes,
                          BIGNUM *e_value, BN_GENCB *cb);
 

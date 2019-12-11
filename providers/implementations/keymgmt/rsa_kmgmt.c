@@ -16,6 +16,7 @@
 #include "internal/param_build.h"
 #include "prov/implementations.h"
 #include "prov/providercommon.h"
+#include "prov/provider_ctx.h"
 #include "crypto/rsa.h"
 
 static OSSL_OP_keymgmt_importkey_fn rsa_importkey;
@@ -157,8 +158,9 @@ static int key_to_params(RSA *rsa, OSSL_PARAM_BLD *tmpl)
 static void *rsa_importkey(void *provctx, const OSSL_PARAM params[])
 {
     RSA *rsa;
+    OPENSSL_CTX *libctx = PROV_LIBRARY_CONTEXT_OF(provctx);
 
-    if ((rsa = RSA_new()) == NULL
+    if ((rsa = rsa_new(libctx)) == NULL
         || !params_to_key(rsa, params)) {
         RSA_free(rsa);
         rsa = NULL;

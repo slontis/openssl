@@ -22,13 +22,14 @@ int DSA_generate_key(DSA *dsa)
     return dsa_builtin_keygen(dsa);
 }
 
-static int dsa_builtin_keygen(DSA *dsa)
+/* TODO(3.0) : make non static and use in provider */
+static int dsa_builtin_keygen_int(OPENSSL_CTX *libctx, DSA *dsa)
 {
     int ok = 0;
     BN_CTX *ctx = NULL;
     BIGNUM *pub_key = NULL, *priv_key = NULL;
 
-    if ((ctx = BN_CTX_new()) == NULL)
+    if ((ctx = BN_CTX_new_ex(libctx)) == NULL)
         goto err;
 
     if (dsa->priv_key == NULL) {
@@ -38,7 +39,7 @@ static int dsa_builtin_keygen(DSA *dsa)
         priv_key = dsa->priv_key;
 
     do
-        if (!BN_priv_rand_range(priv_key, dsa->q))
+        if (!BN_priv_rand_range_ex(priv_key, dsa->q, ctx))
             goto err;
     while (BN_is_zero(priv_key)) ;
 
@@ -75,4 +76,9 @@ static int dsa_builtin_keygen(DSA *dsa)
         BN_free(priv_key);
     BN_CTX_free(ctx);
     return ok;
+}
+
+static int dsa_builtin_keygen(DSA *dsa)
+{
+    return dsa_builtin_keygen_int(NULL, dsa);
 }

@@ -12,7 +12,7 @@
 #include "internal/refcount.h"
 #include <openssl/bn.h>
 #include "dsa_local.h"
-#include <openssl/asn1.h>
+//#include <openssl/asn1.h>
 #include <openssl/engine.h>
 #include <openssl/dh.h>
 
@@ -31,7 +31,7 @@ int DSA_set_method(DSA *dsa, const DSA_METHOD *meth)
     mtmp = dsa->meth;
     if (mtmp->finish)
         mtmp->finish(dsa);
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(FIPS_MODE) && !defined(OPENSSL_NO_ENGINE)
     ENGINE_finish(dsa->engine);
     dsa->engine = NULL;
 #endif
@@ -64,7 +64,7 @@ DSA *DSA_new_method(ENGINE *engine)
     }
 
     ret->meth = DSA_get_default_method();
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(FIPS_MODE) && !defined(OPENSSL_NO_ENGINE)
     ret->flags = ret->meth->flags & ~DSA_FLAG_NON_FIPS_ALLOW; /* early default init */
     if (engine) {
         if (!ENGINE_init(engine)) {
@@ -115,7 +115,7 @@ void DSA_free(DSA *r)
 
     if (r->meth != NULL && r->meth->finish != NULL)
         r->meth->finish(r);
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(FIPS_MODE) && !defined(OPENSSL_NO_ENGINE)
     ENGINE_finish(r->engine);
 #endif
 
@@ -141,28 +141,6 @@ int DSA_up_ref(DSA *r)
     REF_PRINT_COUNT("DSA", r);
     REF_ASSERT_ISNT(i < 2);
     return ((i > 1) ? 1 : 0);
-}
-
-int DSA_size(const DSA *r)
-{
-    int ret, i;
-    ASN1_INTEGER bs;
-    unsigned char buf[4];       /* 4 bytes looks really small. However,
-                                 * i2d_ASN1_INTEGER() will not look beyond
-                                 * the first byte, as long as the second
-                                 * parameter is NULL. */
-
-    i = BN_num_bits(r->q);
-    bs.length = (i + 7) / 8;
-    bs.data = buf;
-    bs.type = V_ASN1_INTEGER;
-    /* If the top bit is set the asn1 encoding is 1 larger. */
-    buf[0] = 0xff;
-
-    i = i2d_ASN1_INTEGER(&bs, NULL);
-    i += i;                     /* r and s */
-    ret = ASN1_object_size(1, i, V_ASN1_SEQUENCE);
-    return ret;
 }
 
 int DSA_set_ex_data(DSA *d, int idx, void *arg)

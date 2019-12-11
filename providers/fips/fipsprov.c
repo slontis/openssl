@@ -25,6 +25,7 @@
 
 #include "internal/cryptlib.h"
 #include "internal/property.h"
+#include "internal/constant_time.h"
 #include "crypto/evp.h"
 #include "prov/implementations.h"
 #include "prov/provider_ctx.h"
@@ -48,6 +49,7 @@ static OSSL_core_get_params_fn *c_get_params;
 OSSL_core_thread_start_fn *c_thread_start;
 static OSSL_core_new_error_fn *c_new_error;
 static OSSL_core_set_error_debug_fn *c_set_error_debug;
+static OSSL_core_clear_last_error_consttime_fn *c_clear_last_error_consttime;
 static OSSL_core_vset_error_fn *c_vset_error;
 static OSSL_CRYPTO_malloc_fn *c_CRYPTO_malloc;
 static OSSL_CRYPTO_zalloc_fn *c_CRYPTO_zalloc;
@@ -417,6 +419,37 @@ static const OSSL_ALGORITHM fips_kdfs[] = {
     { NULL, NULL, NULL }
 };
 
+static const OSSL_ALGORITHM fips_keyexch[] = {
+#ifndef OPENSSL_NO_DH
+    { "DH:dhKeyAgreement", "fips=yes", dh_keyexch_functions },
+#endif
+    { NULL, NULL, NULL }
+};
+
+static const OSSL_ALGORITHM fips_signature[] = {
+#ifndef OPENSSL_NO_DSA
+    { "DSA:dsaEncryption", "fips=yes", dsa_signature_functions },
+#endif
+    { NULL, NULL, NULL }
+};
+
+static const OSSL_ALGORITHM fips_keymgmt[] = {
+#ifndef OPENSSL_NO_DH
+    { "DH", "fips=yes", dh_keymgmt_functions },
+#endif
+#ifndef OPENSSL_NO_DSA
+    { "DSA", "fips=yes", dsa_keymgmt_functions },
+#endif
+    { "RSA", "fips=yes", rsa_keymgmt_functions },
+    { NULL, NULL, NULL }
+};
+
+static const OSSL_ALGORITHM fips_asym_cipher[] = {
+    { "RSA:rsaEncryption", "fips=yes", rsa_asym_cipher_functions },
+    { NULL, NULL, NULL }
+};
+
+
 static const OSSL_ALGORITHM *fips_query(OSSL_PROVIDER *prov,
                                          int operation_id,
                                          int *no_cache)
@@ -431,6 +464,14 @@ static const OSSL_ALGORITHM *fips_query(OSSL_PROVIDER *prov,
         return fips_macs;
     case OSSL_OP_KDF:
         return fips_kdfs;
+    case OSSL_OP_KEYMGMT:
+        return fips_keymgmt;
+    case OSSL_OP_KEYEXCH:
+        return fips_keyexch;
+    case OSSL_OP_SIGNATURE:
+        return fips_signature;
+    case OSSL_OP_ASYM_CIPHER:
+        return fips_asym_cipher;
     }
     return NULL;
 }
@@ -482,6 +523,10 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
             break;
         case OSSL_FUNC_CORE_VSET_ERROR:
             c_vset_error = OSSL_get_core_vset_error(in);
+            break;
+        case OSSL_FUNC_CORE_CLEAR_LAST_ERROR_CONSTTIME:
+            c_clear_last_error_consttime =
+                OSSL_get_core_clear_last_error_consttime(in);
             break;
         case OSSL_FUNC_CRYPTO_MALLOC:
             c_CRYPTO_malloc = OSSL_get_CRYPTO_malloc(in);
@@ -636,6 +681,11 @@ void ERR_set_error(int lib, int reason, const char *fmt, ...)
 void ERR_vset_error(int lib, int reason, const char *fmt, va_list args)
 {
     c_vset_error(NULL, ERR_PACK(lib, 0, reason), fmt, args);
+}
+
+void err_clear_last_constant_time(int clear)
+{
+    c_clear_last_error_consttime(clear);
 }
 
 const OSSL_PROVIDER *FIPS_get_provider(OPENSSL_CTX *ctx)

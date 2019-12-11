@@ -17,10 +17,11 @@
 #include <time.h>
 #include "internal/cryptlib.h"
 #include <openssl/bn.h>
+#include "crypto/rsa.h"
 #include "rsa_local.h"
 
-static int rsa_builtin_keygen(RSA *rsa, int bits, int primes, BIGNUM *e_value,
-                              BN_GENCB *cb);
+static int rsa_builtin_keygen(OPENSSL_CTX *ctx, RSA *rsa, int bits, int primes,
+                              BIGNUM *e_value, BN_GENCB *cb);
 
 /*
  * NB: this wrapper would normally be placed in rsa_lib.c and the static
@@ -38,9 +39,10 @@ int RSA_generate_key_ex(RSA *rsa, int bits, BIGNUM *e_value, BN_GENCB *cb)
                                         e_value, cb);
 }
 
-int RSA_generate_multi_prime_key(RSA *rsa, int bits, int primes,
-                                 BIGNUM *e_value, BN_GENCB *cb)
+int rsa_generate_key_int(OPENSSL_CTX *libctx, RSA *rsa, int bits, int primes,
+                         BIGNUM *e_value, BN_GENCB *cb)
 {
+    /* legacy - the keygen methods are NULL for the default case */
 #ifndef FIPS_MODE
     /* multi-prime is only supported with the builtin key generation */
     if (rsa->meth->rsa_multi_prime_keygen != NULL) {
@@ -59,16 +61,24 @@ int RSA_generate_multi_prime_key(RSA *rsa, int bits, int primes,
             return 0;
     }
 #endif /* FIPS_MODE */
-    return rsa_builtin_keygen(rsa, bits, primes, e_value, cb);
+
+    /* non legacy */
+    return rsa_builtin_keygen(libctx, rsa, bits, primes, e_value, cb);
 }
 
-static int rsa_builtin_keygen(RSA *rsa, int bits, int primes, BIGNUM *e_value,
-                              BN_GENCB *cb)
+int RSA_generate_multi_prime_key(RSA *rsa, int bits, int primes,
+                                 BIGNUM *e_value, BN_GENCB *cb)
+{
+    return rsa_generate_key_int(NULL, rsa, bits, primes, e_value, cb);
+}
+
+static int rsa_builtin_keygen(OPENSSL_CTX *libctx, RSA *rsa, int bits,
+                              int primes, BIGNUM *e_value, BN_GENCB *cb)
 {
 #ifdef FIPS_MODE
     if (primes != 2)
         return 0;
-    return rsa_sp800_56b_generate_key(rsa, bits, e_value, cb);
+    return rsa_sp800_56b_generate_key(libctx, rsa, bits, e_value, cb);
 #else
     BIGNUM *r0 = NULL, *r1 = NULL, *r2 = NULL, *tmp, *prime;
     int ok = -1, n = 0, bitsr[RSA_MAX_PRIME_NUM], bitse = 0;
@@ -91,7 +101,7 @@ static int rsa_builtin_keygen(RSA *rsa, int bits, int primes, BIGNUM *e_value,
         goto err;
     }
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(libctx);
     if (ctx == NULL)
         goto err;
     BN_CTX_start(ctx);
@@ -169,7 +179,8 @@ static int rsa_builtin_keygen(RSA *rsa, int bits, int primes, BIGNUM *e_value,
 
         for (;;) {
  redo:
-            if (!BN_generate_prime_ex(prime, bitsr[i] + adj, 0, NULL, NULL, cb))
+            if (!BN_generate_prime_ex2(prime, bitsr[i] + adj, 0, NULL, NULL, cb,
+                                       ctx))
                 goto err;
             /*
              * prime should not be equal to p, q, r_3...

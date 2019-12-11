@@ -107,22 +107,23 @@ static int rsa_encrypt(void *vprsactx, unsigned char *out, size_t *outlen,
             PROVerr(0, ERR_R_MALLOC_FAILURE);
             return 0;
         }
-        ret = RSA_padding_add_PKCS1_OAEP_mgf1(tbuf, rsasize, in, inlen,
-                                              prsactx->oaep_label,
-                                              prsactx->oaep_labellen,
-                                              prsactx->oaep_md,
-                                              prsactx->mgf1_md);
+        ret = rsa_padding_add_PKCS1_OAEP_mgf1_int(prsactx->libctx,
+                                                  tbuf, rsasize, in, inlen,
+                                                  prsactx->oaep_label,
+                                                  prsactx->oaep_labellen,
+                                                  prsactx->oaep_md,
+                                                  prsactx->mgf1_md);
 
         if (!ret) {
             OPENSSL_free(tbuf);
             return 0;
         }
-        ret = RSA_public_encrypt(rsasize, tbuf, out, prsactx->rsa,
-                                 RSA_NO_PADDING);
+        ret = rsa_public_encrypt_int(prsactx->libctx, rsasize, tbuf, out,
+                                     prsactx->rsa, RSA_NO_PADDING);
         OPENSSL_free(tbuf);
     } else {
-        ret = RSA_public_encrypt(inlen, in, out, prsactx->rsa,
-                                 prsactx->pad_mode);
+        ret = rsa_public_encrypt_int(prsactx->libctx, inlen, in, out,
+                                     prsactx->rsa, prsactx->pad_mode);
     }
     /* A ret value of 0 is not an error */
     if (ret < 0)
@@ -171,8 +172,8 @@ static int rsa_decrypt(void *vprsactx, unsigned char *out, size_t *outlen,
             PROVerr(0, ERR_R_MALLOC_FAILURE);
             return 0;
         }
-        ret = RSA_private_decrypt(inlen, in, tbuf, prsactx->rsa,
-                                  RSA_NO_PADDING);
+        ret = rsa_private_decrypt_int(prsactx->libctx, inlen, in, tbuf,
+                                      prsactx->rsa, RSA_NO_PADDING);
         /*
          * With no padding then, on success ret should be len, otherwise an
          * error occurred (non-constant time)
@@ -195,15 +196,16 @@ static int rsa_decrypt(void *vprsactx, unsigned char *out, size_t *outlen,
                 ERR_raise(ERR_LIB_PROV, PROV_R_BAD_TLS_CLIENT_VERSION);
                 return 0;
             }
-            ret = rsa_padding_check_PKCS1_type_2_TLS(out, outsize,
+            ret = rsa_padding_check_PKCS1_type_2_TLS(prsactx->libctx,
+                                                     out, outsize,
                                                      tbuf, len,
                                                      prsactx->client_version,
                                                      prsactx->alt_version);
         }
         OPENSSL_free(tbuf);
     } else {
-        ret = RSA_private_decrypt(inlen, in, out, prsactx->rsa,
-                                  prsactx->pad_mode);
+        ret = rsa_private_decrypt_int(prsactx->libctx, inlen, in, out,
+                                      prsactx->rsa, prsactx->pad_mode);
     }
     *outlen = constant_time_select_s(constant_time_msb_s(ret), *outlen, ret);
     ret = constant_time_select_int(constant_time_msb(ret), 0, 1);

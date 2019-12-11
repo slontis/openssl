@@ -59,7 +59,8 @@ const DSA_METHOD *DSA_OpenSSL(void)
     return &openssl_dsa_meth;
 }
 
-static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa)
+static DSA_SIG *dsa_do_sign_int(OPENSSL_CTX *libctx, const unsigned char *dgst,
+                                int dlen, DSA *dsa)
 {
     BIGNUM *kinv = NULL;
     BIGNUM *m, *blind, *blindm, *tmp;
@@ -85,7 +86,7 @@ static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa)
     if (ret->r == NULL || ret->s == NULL)
         goto err;
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(libctx);
     if (ctx == NULL)
         goto err;
     m = BN_CTX_get(ctx);
@@ -121,8 +122,8 @@ static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa)
 
     /* Generate a blinding value */
     do {
-        if (!BN_priv_rand(blind, BN_num_bits(dsa->q) - 1,
-                          BN_RAND_TOP_ANY, BN_RAND_BOTTOM_ANY))
+        if (!BN_priv_rand_ex(blind, BN_num_bits(dsa->q) - 1,
+                             BN_RAND_TOP_ANY, BN_RAND_BOTTOM_ANY, ctx))
             goto err;
     } while (BN_is_zero(blind));
     BN_set_flags(blind, BN_FLG_CONSTTIME);
@@ -173,6 +174,12 @@ static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa)
     return ret;
 }
 
+static DSA_SIG *dsa_do_sign(const unsigned char *dgst, int dlen, DSA *dsa)
+{
+    return dsa_do_sign_int(NULL, dgst, dlen, dsa);
+}
+
+
 static int dsa_sign_setup_no_digest(DSA *dsa, BN_CTX *ctx_in,
                                     BIGNUM **kinvp, BIGNUM **rp)
 {
@@ -210,10 +217,11 @@ static int dsa_sign_setup(DSA *dsa, BN_CTX *ctx_in,
         goto err;
 
     if (ctx_in == NULL) {
-        if ((ctx = BN_CTX_new()) == NULL)
+        if ((ctx = BN_CTX_new_ex(NULL)) == NULL)
             goto err;
-    } else
+    } else {
         ctx = ctx_in;
+    }
 
     /* Preallocate space */
     q_bits = BN_num_bits(dsa->q);
@@ -232,7 +240,7 @@ static int dsa_sign_setup(DSA *dsa, BN_CTX *ctx_in,
             if (!BN_generate_dsa_nonce(k, dsa->q, dsa->priv_key, dgst,
                                        dlen, ctx))
                 goto err;
-        } else if (!BN_priv_rand_range(k, dsa->q))
+        } else if (!BN_priv_rand_range_ex(k, dsa->q, ctx))
             goto err;
     } while (BN_is_zero(k));
 
@@ -323,7 +331,7 @@ static int dsa_do_verify(const unsigned char *dgst, int dgst_len,
     u1 = BN_new();
     u2 = BN_new();
     t1 = BN_new();
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(NULL);
     if (u1 == NULL || u2 == NULL || t1 == NULL || ctx == NULL)
         goto err;
 

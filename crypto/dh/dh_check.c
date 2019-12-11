@@ -44,7 +44,7 @@ int DH_check_params(const DH *dh, int *ret)
     BN_CTX *ctx = NULL;
 
     *ret = 0;
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(NULL);
     if (ctx == NULL)
         goto err;
     BN_CTX_start(ctx);
@@ -114,7 +114,7 @@ int DH_check(const DH *dh, int *ret)
     if (!DH_check_params(dh, ret))
         return 0;
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(NULL);
     if (ctx == NULL)
         goto err;
     BN_CTX_start(ctx);
@@ -194,7 +194,7 @@ int DH_check_pub_key(const DH *dh, const BIGNUM *pub_key, int *ret)
     BN_CTX *ctx = NULL;
 
     *ret = 0;
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(NULL);
     if (ctx == NULL)
         goto err;
     BN_CTX_start(ctx);

@@ -13,9 +13,11 @@
 #include <openssl/rsa.h>
 #include <openssl/rand.h>
 #include "internal/constant_time.h"
+#include "crypto/rsa.h"
+#include "crypto/rand.h"
 
-int RSA_padding_add_SSLv23(unsigned char *to, int tlen,
-                           const unsigned char *from, int flen)
+int rsa_padding_add_SSLv23_int(OPENSSL_CTX *libctx, unsigned char *to, int tlen,
+                               const unsigned char *from, int flen)
 {
     int i, j;
     unsigned char *p;
@@ -34,12 +36,12 @@ int RSA_padding_add_SSLv23(unsigned char *to, int tlen,
     /* pad out with non-zero random data */
     j = tlen - 3 - 8 - flen;
 
-    if (RAND_bytes(p, j) <= 0)
+    if (rand_bytes_ex(libctx, p, j) <= 0)
         return 0;
     for (i = 0; i < j; i++) {
         if (*p == '\0')
             do {
-                if (RAND_bytes(p, 1) <= 0)
+                if (rand_bytes_ex(libctx, p, 1) <= 0)
                     return 0;
             } while (*p == '\0');
         p++;
@@ -52,6 +54,13 @@ int RSA_padding_add_SSLv23(unsigned char *to, int tlen,
     memcpy(p, from, (unsigned int)flen);
     return 1;
 }
+
+int RSA_padding_add_SSLv23(unsigned char *to, int tlen,
+                           const unsigned char *from, int flen)
+{
+    return rsa_padding_add_SSLv23_int(NULL, to, tlen, from, flen);
+}
+
 
 /*
  * Copy of RSA_padding_check_PKCS1_type_2 with a twist that rejects padding

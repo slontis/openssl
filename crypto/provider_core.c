@@ -17,6 +17,7 @@
 #include "internal/thread_once.h"
 #include "internal/provider.h"
 #include "internal/refcount.h"
+#include "internal/constant_time.h"
 #include "provider_local.h"
 
 static OSSL_PROVIDER *provider_new(const char *name,
@@ -869,6 +870,8 @@ static const OSSL_DISPATCH core_dispatch_[] = {
     { OSSL_FUNC_CORE_NEW_ERROR, (void (*)(void))core_new_error },
     { OSSL_FUNC_CORE_SET_ERROR_DEBUG, (void (*)(void))core_set_error_debug },
     { OSSL_FUNC_CORE_VSET_ERROR, (void (*)(void))core_vset_error },
+    { OSSL_FUNC_CORE_CLEAR_LAST_ERROR_CONSTTIME,
+        (void (*)(void))err_clear_last_constant_time},
     { OSSL_FUNC_BIO_NEW_FILE, (void (*)(void))BIO_new_file },
     { OSSL_FUNC_BIO_NEW_MEMBUF, (void (*)(void))BIO_new_mem_buf },
     { OSSL_FUNC_BIO_READ_EX, (void (*)(void))BIO_read_ex },

@@ -11,6 +11,7 @@
 #include <openssl/crypto.h>
 #include "internal/cryptlib.h"
 #include "crypto/bn.h"
+#include "crypto/rsa.h"
 #include <openssl/rand.h>
 #include "rsa_local.h"
 
@@ -30,6 +31,17 @@ int RSA_public_encrypt(int flen, const unsigned char *from, unsigned char *to,
     return rsa->meth->rsa_pub_enc(flen, from, to, rsa, padding);
 }
 
+int rsa_public_encrypt_int(OPENSSL_CTX *libctx, int flen,
+                           const unsigned char *from, unsigned char *to,
+                           RSA *rsa, int padding)
+{
+    /* legacy */
+    if (rsa->meth->rsa_pub_enc != RSA_PKCS1_OpenSSL()->rsa_pub_enc)
+        return RSA_public_encrypt(flen, from, to, rsa, padding);
+    /* provider */
+    return rsa_ossl_public_encrypt_int(libctx, flen, from, to, rsa, padding);
+}
+
 int RSA_private_encrypt(int flen, const unsigned char *from,
                         unsigned char *to, RSA *rsa, int padding)
 {
@@ -41,6 +53,18 @@ int RSA_private_decrypt(int flen, const unsigned char *from,
 {
     return rsa->meth->rsa_priv_dec(flen, from, to, rsa, padding);
 }
+
+int rsa_private_decrypt_int(OPENSSL_CTX *libctx, int flen,
+                            const unsigned char *from, unsigned char *to,
+                            RSA *rsa, int padding)
+{
+    /* legacy */
+    if (rsa->meth->rsa_priv_dec != RSA_PKCS1_OpenSSL()->rsa_priv_dec)
+        return RSA_private_decrypt(flen, from, to, rsa, padding);
+    /* provider */
+    return rsa_ossl_private_decrypt_int(libctx, flen, from, to, rsa, padding);
+}
+
 
 int RSA_public_decrypt(int flen, const unsigned char *from, unsigned char *to,
                        RSA *rsa, int padding)
@@ -114,7 +138,7 @@ BN_BLINDING *RSA_setup_blinding(RSA *rsa, BN_CTX *in_ctx)
     BN_BLINDING *ret = NULL;
 
     if (in_ctx == NULL) {
-        if ((ctx = BN_CTX_new()) == NULL)
+        if ((ctx = BN_CTX_new_ex(NULL)) == NULL)
             return 0;
     } else {
         ctx = in_ctx;

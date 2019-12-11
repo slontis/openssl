@@ -9,6 +9,7 @@
 
 #include "internal/cryptlib.h"
 #include "crypto/bn.h"
+#include "crypto/rsa.h"
 #include "rsa_local.h"
 #include "internal/constant_time.h"
 
@@ -65,8 +66,9 @@ const RSA_METHOD *RSA_null_method(void)
     return NULL;
 }
 
-static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
-                                  unsigned char *to, RSA *rsa, int padding)
+int rsa_ossl_public_encrypt_int(OPENSSL_CTX *libctx, int flen,
+                                const unsigned char *from, unsigned char *to,
+                                RSA *rsa, int padding)
 {
     BIGNUM *f, *ret;
     int i, num = 0, r = -1;
@@ -91,7 +93,7 @@ static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
         }
     }
 
-    if ((ctx = BN_CTX_new()) == NULL)
+    if ((ctx = BN_CTX_new_ex(libctx)) == NULL)
         goto err;
     BN_CTX_start(ctx);
     f = BN_CTX_get(ctx);
@@ -105,14 +107,16 @@ static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
 
     switch (padding) {
     case RSA_PKCS1_PADDING:
-        i = RSA_padding_add_PKCS1_type_2(buf, num, from, flen);
+        i = rsa_padding_add_PKCS1_type_2_int(libctx, buf, num, from, flen);
         break;
     case RSA_PKCS1_OAEP_PADDING:
-        i = RSA_padding_add_PKCS1_OAEP(buf, num, from, flen, NULL, 0);
+        i = rsa_padding_add_PKCS1_OAEP_int(libctx, buf, num, from, flen, NULL, 0);
         break;
+#ifndef FIPS_MODE
     case RSA_SSLV23_PADDING:
-        i = RSA_padding_add_SSLv23(buf, num, from, flen);
+        i = rsa_padding_add_SSLv23_int(libctx, buf, num, from, flen);
         break;
+#endif
     case RSA_NO_PADDING:
         i = RSA_padding_add_none(buf, num, from, flen);
         break;
@@ -152,6 +156,12 @@ static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
     BN_CTX_free(ctx);
     OPENSSL_clear_free(buf, num);
     return r;
+}
+
+static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
+                                   unsigned char *to, RSA *rsa, int padding)
+{
+    return rsa_ossl_public_encrypt_int(NULL, flen, from, to, rsa, padding);
 }
 
 static BN_BLINDING *rsa_get_blinding(RSA *rsa, int *local, BN_CTX *ctx)
@@ -229,9 +239,13 @@ static int rsa_blinding_invert(BN_BLINDING *b, BIGNUM *f, BIGNUM *unblind,
     return BN_BLINDING_invert_ex(f, unblind, b, ctx);
 }
 
-/* signing */
-static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
-                                   unsigned char *to, RSA *rsa, int padding)
+/*
+ * signin
+ * libctx is required for blinding.
+ */
+static int rsa_ossl_private_encrypt_int(OPENSSL_CTX *libctx,
+                                    int flen, const unsigned char *from,
+                                    unsigned char *to, RSA *rsa, int padding)
 {
     BIGNUM *f, *ret, *res;
     int i, num = 0, r = -1;
@@ -246,7 +260,7 @@ static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
     BIGNUM *unblind = NULL;
     BN_BLINDING *blinding = NULL;
 
-    if ((ctx = BN_CTX_new()) == NULL)
+    if ((ctx = BN_CTX_new_ex(libctx)) == NULL)
         goto err;
     BN_CTX_start(ctx);
     f = BN_CTX_get(ctx);
@@ -364,8 +378,16 @@ static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
     return r;
 }
 
-static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
-                                   unsigned char *to, RSA *rsa, int padding)
+static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
+                                    unsigned char *to, RSA *rsa, int padding)
+{
+    return rsa_ossl_private_encrypt_int(NULL, flen, from, to, rsa, padding);
+}
+
+/* libctx is required for blinding */
+int rsa_ossl_private_decrypt_int(OPENSSL_CTX *libctx,
+                                 int flen, const unsigned char *from,
+                                 unsigned char *to, RSA *rsa, int padding)
 {
     BIGNUM *f, *ret;
     int j, num = 0, r = -1;
@@ -380,7 +402,7 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
     BIGNUM *unblind = NULL;
     BN_BLINDING *blinding = NULL;
 
-    if ((ctx = BN_CTX_new()) == NULL)
+    if ((ctx = BN_CTX_new_ex(libctx)) == NULL)
         goto err;
     BN_CTX_start(ctx);
     f = BN_CTX_get(ctx);
@@ -480,9 +502,11 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
     case RSA_PKCS1_OAEP_PADDING:
         r = RSA_padding_check_PKCS1_OAEP(to, num, buf, j, num, NULL, 0);
         break;
+#ifndef FIPS_MODE
     case RSA_SSLV23_PADDING:
         r = RSA_padding_check_SSLv23(to, num, buf, j, num);
         break;
+#endif
     case RSA_NO_PADDING:
         memcpy(to, buf, (r = j));
         break;
@@ -500,9 +524,15 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
     return r;
 }
 
+int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
+                             unsigned char *to, RSA *rsa, int padding)
+{
+    return rsa_ossl_private_decrypt_int(NULL, flen, from, to, rsa, padding);
+}
+
 /* signature verification */
 static int rsa_ossl_public_decrypt(int flen, const unsigned char *from,
-                                  unsigned char *to, RSA *rsa, int padding)
+                                   unsigned char *to, RSA *rsa, int padding)
 {
     BIGNUM *f, *ret;
     int i, num = 0, r = -1;
@@ -527,7 +557,8 @@ static int rsa_ossl_public_decrypt(int flen, const unsigned char *from,
         }
     }
 
-    if ((ctx = BN_CTX_new()) == NULL)
+    /* libctx is not required here */
+    if ((ctx = BN_CTX_new_ex(NULL)) == NULL)
         goto err;
     BN_CTX_start(ctx);
     f = BN_CTX_get(ctx);

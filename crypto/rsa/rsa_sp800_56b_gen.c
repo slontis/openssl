@@ -59,7 +59,8 @@ int rsa_fips186_4_gen_prob_primes(RSA *rsa, BIGNUM *p1, BIGNUM *p2,
     int ret = 0, ok;
     BIGNUM *Xpo = NULL, *Xqo = NULL, *tmp = NULL;
 
-    /* (Step 1) Check key length
+    /*
+     * (Step 1) Check key length
      * NOTE: SP800-131A Rev1 Disallows key lengths of < 2048 bits for RSA
      * Signature Generation and Key Agree/Transport.
      */
@@ -74,7 +75,8 @@ int rsa_fips186_4_gen_prob_primes(RSA *rsa, BIGNUM *p1, BIGNUM *p2,
         return 0;
     }
 
-    /* (Step 3) Determine strength and check rand generator strength is ok -
+    /*
+     * (Step 3) Determine strength and check rand generator strength is ok -
      * this step is redundant because the generator always returns a higher
      * strength than is required.
      */
@@ -159,7 +161,6 @@ int rsa_sp800_56b_validate_strength(int nbits, int strength)
 }
 
 /*
- *
  * Using p & q, calculate other required parameters such as n, d.
  * as well as the CRT parameters dP, dQ, qInv.
  *
@@ -285,8 +286,8 @@ err:
  *     cb An optional BIGNUM callback.
  * Returns: 1 if successfully generated otherwise it returns 0.
  */
-int rsa_sp800_56b_generate_key(RSA *rsa, int nbits, const BIGNUM *efixed,
-                               BN_GENCB *cb)
+int rsa_sp800_56b_generate_key(OPENSSL_CTX *libctx, RSA *rsa, int nbits,
+                               const BIGNUM *efixed, BN_GENCB *cb)
 {
     int ret = 0;
     int ok;
@@ -297,7 +298,7 @@ int rsa_sp800_56b_generate_key(RSA *rsa, int nbits, const BIGNUM *efixed,
     if (!rsa_sp800_56b_validate_strength(nbits, -1))
         return 0;
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(libctx);
     if (ctx == NULL)
         return 0;
 

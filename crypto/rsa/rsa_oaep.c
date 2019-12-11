@@ -28,14 +28,25 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#include "crypto/rsa.h"
+#include "crypto/rand.h"
 #include "rsa_local.h"
 
 int RSA_padding_add_PKCS1_OAEP(unsigned char *to, int tlen,
                                const unsigned char *from, int flen,
                                const unsigned char *param, int plen)
 {
-    return RSA_padding_add_PKCS1_OAEP_mgf1(to, tlen, from, flen,
-                                           param, plen, NULL, NULL);
+    return rsa_padding_add_PKCS1_OAEP_mgf1_int(NULL, to, tlen, from, flen,
+                                               param, plen, NULL, NULL);
+}
+
+int rsa_padding_add_PKCS1_OAEP_int(OPENSSL_CTX *libctx,
+                                   unsigned char *to, int tlen,
+                                   const unsigned char *from, int flen,
+                                   const unsigned char *param, int plen)
+{
+    return rsa_padding_add_PKCS1_OAEP_mgf1_int(libctx, to, tlen, from, flen,
+                                               param, plen, NULL, NULL);
 }
 
 /*
@@ -45,10 +56,11 @@ int RSA_padding_add_PKCS1_OAEP(unsigned char *to, int tlen,
  * Step numbers are included here but not in the constant time inverse below
  * to avoid complicating an already difficult enough function.
  */
-int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
-                                    const unsigned char *from, int flen,
-                                    const unsigned char *param, int plen,
-                                    const EVP_MD *md, const EVP_MD *mgf1md)
+int rsa_padding_add_PKCS1_OAEP_mgf1_int(OPENSSL_CTX *libctx,
+                                        unsigned char *to, int tlen,
+                                        const unsigned char *from, int flen,
+                                        const unsigned char *param, int plen,
+                                        const EVP_MD *md, const EVP_MD *mgf1md)
 {
     int rv = 0;
     int i, emlen = tlen - 1;
@@ -56,9 +68,14 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     unsigned char *dbmask = NULL;
     unsigned char seedmask[EVP_MAX_MD_SIZE];
     int mdlen, dbmask_len = 0;
+    EVP_MD *fetched = NULL;
 
-    if (md == NULL)
-        md = EVP_sha1();
+    if (md == NULL) {
+        fetched = EVP_MD_fetch(NULL, SN_sha1, "");
+        if (fetched == NULL)
+            return 0;
+        md = (const EVP_MD *)fetched;
+    }
     if (mgf1md == NULL)
         mgf1md = md;
 
@@ -68,13 +85,13 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     if (flen > emlen - 2 * mdlen - 1) {
         RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1,
                RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);
-        return 0;
+        goto end;
     }
 
     if (emlen < 2 * mdlen + 1) {
         RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1,
                RSA_R_KEY_SIZE_TOO_SMALL);
-        return 0;
+        goto end;
     }
 
     /* step 3i: EM = 00000000 || maskedMGF || maskedDB */
@@ -91,7 +108,7 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     db[emlen - flen - mdlen - 1] = 0x01;
     memcpy(db + emlen - flen - mdlen, from, (unsigned int)flen);
     /* step 3d: generate random byte string */
-    if (RAND_bytes(seed, mdlen) <= 0)
+    if (rand_bytes_ex(libctx, seed, mdlen) <= 0)
         goto err;
 
     dbmask_len = emlen - mdlen;
@@ -116,10 +133,21 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
         seed[i] ^= seedmask[i];
     rv = 1;
 
- err:
+err:
     OPENSSL_cleanse(seedmask, sizeof(seedmask));
     OPENSSL_clear_free(dbmask, dbmask_len);
+end:
+    EVP_MD_free(fetched);
     return rv;
+}
+
+int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
+                                    const unsigned char *from, int flen,
+                                    const unsigned char *param, int plen,
+                                    const EVP_MD *md, const EVP_MD *mgf1md)
+{
+    return rsa_padding_add_PKCS1_OAEP_mgf1_int(NULL, to, tlen, from, flen,
+                                               param, plen, md, mgf1md);
 }
 
 int RSA_padding_check_PKCS1_OAEP(unsigned char *to, int tlen,
@@ -139,6 +167,7 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     int i, dblen = 0, mlen = -1, one_index = 0, msg_index;
     unsigned int good = 0, found_one_byte, mask;
     const unsigned char *maskedseed, *maskeddb;
+    EVP_MD *fetched = NULL;
     /*
      * |em| is the encoded message, zero-padded to exactly |num| bytes: em =
      * Y || maskedSeed || maskedDB
@@ -147,15 +176,20 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
         phash[EVP_MAX_MD_SIZE];
     int mdlen;
 
-    if (md == NULL)
-        md = EVP_sha1();
+    if (md == NULL) {
+        /* We dont need a libctx for this default case */
+        fetched = EVP_MD_fetch(NULL, SN_sha1, "");
+        if (fetched == NULL)
+            return -1;
+        md = (const EVP_MD *)fetched;
+    }
     if (mgf1md == NULL)
         mgf1md = md;
 
     mdlen = EVP_MD_size(md);
 
     if (tlen <= 0 || flen <= 0)
-        return -1;
+        goto err;
     /*
      * |num| is the length of the modulus; |flen| is the length of the
      * encoded message. Therefore, for any |from| that was obtained by
@@ -167,7 +201,7 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     if (num < flen || num < 2 * mdlen + 2) {
         RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1,
                RSA_R_OAEP_DECODING_ERROR);
-        return -1;
+        goto err;
     }
 
     dblen = num - mdlen - 1;
@@ -283,8 +317,12 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     OPENSSL_cleanse(seed, sizeof(seed));
     OPENSSL_clear_free(db, dblen);
     OPENSSL_clear_free(em, num);
+    EVP_MD_free(fetched);
 
     return constant_time_select_int(good, mlen, -1);
+ err:
+    EVP_MD_free(fetched);
+    return -1;
 }
 
 /*

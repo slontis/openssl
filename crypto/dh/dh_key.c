@@ -73,7 +73,8 @@ const DH_METHOD *DH_get_default_method(void)
     return default_DH_method;
 }
 
-static int generate_key(DH *dh)
+/* TODO(3.0) - Make non static and expose to provider */
+static int dh_generate_key_int(OPENSSL_CTX *libctx, DH *dh)
 {
     int ok = 0;
     int generate_new_key = 0;
@@ -92,7 +93,7 @@ static int generate_key(DH *dh)
         return 0;
     }
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(libctx);
     if (ctx == NULL)
         goto err;
 
@@ -121,14 +122,15 @@ static int generate_key(DH *dh)
     if (generate_new_key) {
         if (dh->q) {
             do {
-                if (!BN_priv_rand_range(priv_key, dh->q))
+                if (!BN_priv_rand_range_ex(priv_key, dh->q, ctx))
                     goto err;
             }
             while (BN_is_zero(priv_key) || BN_is_one(priv_key));
         } else {
             /* secret exponent length */
             l = dh->length ? dh->length : BN_num_bits(dh->p) - 1;
-            if (!BN_priv_rand(priv_key, l, BN_RAND_TOP_ONE, BN_RAND_BOTTOM_ANY))
+            if (!BN_priv_rand_ex(priv_key, l, BN_RAND_TOP_ONE,
+                                 BN_RAND_BOTTOM_ANY, ctx))
                 goto err;
             /*
              * We handle just one known case where g is a quadratic non-residue:
@@ -173,6 +175,11 @@ static int generate_key(DH *dh)
     return ok;
 }
 
+static int generate_key(DH *dh)
+{
+    return dh_generate_key_int(NULL, dh);
+}
+
 static int compute_key(unsigned char *key, const BIGNUM *pub_key, DH *dh)
 {
     BN_CTX *ctx = NULL;
@@ -191,7 +198,7 @@ static int compute_key(unsigned char *key, const BIGNUM *pub_key, DH *dh)
         return 0;
     }
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(NULL);
     if (ctx == NULL)
         goto err;
     BN_CTX_start(ctx);

@@ -156,8 +156,8 @@ int rsa_sp800_56b_check_public(const RSA *rsa);
 int rsa_sp800_56b_check_private(const RSA *rsa);
 int rsa_sp800_56b_check_keypair(const RSA *rsa, const BIGNUM *efixed,
                                 int strength, int nbits);
-int rsa_sp800_56b_generate_key(RSA *rsa, int nbits, const BIGNUM *efixed,
-                               BN_GENCB *cb);
+int rsa_sp800_56b_generate_key(OPENSSL_CTX *libctx, RSA *rsa, int nbits,
+                               const BIGNUM *efixed, BN_GENCB *cb);
 
 int rsa_sp800_56b_derive_params_from_pq(RSA *rsa, int nbits,
                                         const BIGNUM *e, BN_CTX *ctx);
@@ -168,5 +168,13 @@ int rsa_fips186_4_gen_prob_primes(RSA *rsa, BIGNUM *p1, BIGNUM *p2,
                                   const BIGNUM *Xq, const BIGNUM *Xq1,
                                   const BIGNUM *Xq2, int nbits,
                                   const BIGNUM *e, BN_CTX *ctx, BN_GENCB *cb);
+
+int rsa_ossl_public_encrypt_int(OPENSSL_CTX *libctx, int flen,
+                                const unsigned char *from, unsigned char *to,
+                                RSA *rsa, int padding);
+
+int rsa_ossl_private_decrypt_int(OPENSSL_CTX *libctx,
+                                 int flen, const unsigned char *from,
+                                 unsigned char *to, RSA *rsa, int padding);
 
 #endif /* OSSL_CRYPTO_RSA_LOCAL_H */

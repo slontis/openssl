@@ -2,12 +2,15 @@
 
 =head1 NAME
 
-CMS_EnvelopedData_create - Create CMS envelope
+CMS_EnvelopedData_create, CMS_EnvelopedData_create_with_libctx - Create CMS envelope
 
 =head1 SYNOPSIS
 
  #include <openssl/cms.h>
 
+ CMS_ContentInfo *CMS_EnvelopedData_create_with_libctx(const EVP_CIPHER *cipher,
+                                                       OPENSSL_CTX *libctx,
+                                                       const char *propq);
  CMS_ContentInfo *CMS_EnvelopedData_create(const EVP_CIPHER *cipher);
 
 =head1 DESCRIPTION
@@ -24,6 +27,11 @@ L<CMS_add0_recipient_key(3)>.
 The B<CMS_ContentInfo> structure needs to be finalized using L<CMS_final(3)>
 and then freed using L<CMS_ContentInfo_free(3)>.
 
+
+CMS_EnvelopedData_create_with_libctx() is similar to CMS_EnvelopedData_create()
+but also passes the library context I<libctx> and the property query I<propq> to
+use when retrieving algorithms from providers.
+
 =head1 NOTES
 
 Although CMS_EnvelopedData_create() allocates a new B<CMS_ContentInfo>
@@ -39,6 +47,10 @@ Otherwise it returns a pointer to the newly allocated structure.
 =head1 SEE ALSO
 
 L<ERR_get_error(3)>, L<CMS_encrypt(3)>, L<CMS_decrypt(3)>, L<CMS_final(3)>
+
+head1 HISTORY
+
+The CMS_EnvelopedData_create_with_libctx() method was added in OpenSSL 3.0.
 
 =head1 COPYRIGHT
 

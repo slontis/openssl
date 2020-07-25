@@ -2,7 +2,8 @@
 
 =head1 NAME
 
-PKCS7_encrypt - create a PKCS#7 envelopedData structure
+PKCS7_encrypt, PKCS7_encrypt_with_libctx
+- create a PKCS#7 envelopedData structure
 
 =head1 SYNOPSIS
 
@@ -10,6 +11,9 @@ PKCS7_encrypt - create a PKCS#7 envelopedData structure
 
  PKCS7 *PKCS7_encrypt(STACK_OF(X509) *certs, BIO *in, const EVP_CIPHER *cipher,
                       int flags);
+ PKCS7 *PKCS7_encrypt_with_libctx(STACK_OF(X509) *certs, BIO *in,
+                                  const EVP_CIPHER *cipher, int flags,
+                                  OPENSSL_CTX *libctx, const char *propq);
 
 =head1 DESCRIPTION
 
@@ -60,10 +64,14 @@ PEM_write_bio_PKCS7_stream() finalize the structure. Alternatively finalization
 can be performed by obtaining the streaming ASN1 B<BIO> directly using
 BIO_new_PKCS7().
 
+PKCS7_encrypt_with_libctx() is similar to PKCS7_encrypt() but also passes the
+library context I<libctx> and the property query I<propq> to use when retrieving
+algorithms from providers.
+
 =head1 RETURN VALUES
 
-PKCS7_encrypt() returns either a PKCS7 structure or NULL if an error occurred.
-The error can be obtained from ERR_get_error(3).
+PKCS7_encrypt() and PKCS7_encrypt_with_libctx() return either a PKCS7 structure
+or NULL if an error occurred. The error can be obtained from ERR_get_error(3).
 
 =head1 SEE ALSO
 
@@ -71,11 +79,13 @@ L<ERR_get_error(3)>, L<PKCS7_decrypt(3)>
 
 =head1 HISTORY
 
+The function PKCS7_encrypt_with_libctx() was added in OpenSSL 3.0.
+
 The B<PKCS7_STREAM> flag was added in OpenSSL 1.0.0.
 
 =head1 COPYRIGHT
 
-Copyright 2002-2016 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2002-2020 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the Apache License 2.0 (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy

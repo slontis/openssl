@@ -12,6 +12,7 @@
 #include <openssl/asn1t.h>
 #include <openssl/pkcs7.h>
 #include <openssl/x509.h>
+#include "pk7_local.h"
 
 /* PKCS#7 ASN1 module */
 
@@ -62,7 +63,33 @@ ASN1_NDEF_SEQUENCE_cb(PKCS7, pk7_cb) = {
         ASN1_ADB_OBJECT(PKCS7)
 }ASN1_NDEF_SEQUENCE_END_cb(PKCS7, PKCS7)
 
-IMPLEMENT_ASN1_FUNCTIONS(PKCS7)
+IMPLEMENT_ASN1_ALLOC_FUNCTIONS_fname(PKCS7, PKCS7, PKCS7)
+
+PKCS7 *d2i_PKCS7(PKCS7 **a, const unsigned char **in, long len)
+{
+    PKCS7 *ret;
+
+    ret = (PKCS7 *)ASN1_item_d2i((ASN1_VALUE **)a, in, len, (PKCS7_it()));
+    if (ret != NULL && a != NULL)
+        pkcs7_resolve_libctx(ret);
+    return ret;
+}
+
+int i2d_PKCS7(const PKCS7 *a, unsigned char **out)
+{
+    return ASN1_item_i2d((const ASN1_VALUE *)a, out, (PKCS7_it()));\
+}
+
+PKCS7 *PKCS7_new_with_libctx(OPENSSL_CTX *libctx, const char *propq)
+{
+    PKCS7 *pkcs7 = PKCS7_new();
+
+    if (pkcs7 != NULL) {
+        pkcs7->ctx.libctx = libctx;
+        pkcs7->ctx.propq = propq;
+    }
+    return pkcs7;
+}
 
 IMPLEMENT_ASN1_NDEF_FUNCTION(PKCS7)
 

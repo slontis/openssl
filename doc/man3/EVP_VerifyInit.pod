@@ -3,7 +3,7 @@
 =head1 NAME
 
 EVP_VerifyInit_ex,
-EVP_VerifyInit, EVP_VerifyUpdate, EVP_VerifyFinal
+EVP_VerifyInit, EVP_VerifyUpdate, EVP_VerifyFinal, EVP_VerifyFinal_with_libctx
 - EVP signature verification functions
 
 =head1 SYNOPSIS
@@ -14,6 +14,9 @@ EVP_VerifyInit, EVP_VerifyUpdate, EVP_VerifyFinal
  int EVP_VerifyUpdate(EVP_MD_CTX *ctx, const void *d, unsigned int cnt);
  int EVP_VerifyFinal(EVP_MD_CTX *ctx, unsigned char *sigbuf, unsigned int siglen,
                      EVP_PKEY *pkey);
+ int EVP_VerifyFinal_with_libctx(EVP_MD_CTX *ctx, const unsigned char *sigbuf,
+                                 unsigned int siglen, EVP_PKEY *pkey,
+                                 OPENSSL_CTX *libctx, const char *propq);
 
  int EVP_VerifyInit(EVP_MD_CTX *ctx, const EVP_MD *type);
 
@@ -33,6 +36,11 @@ same B<ctx> to include additional data.
 EVP_VerifyFinal() verifies the data in B<ctx> using the public key B<pkey>
 and against the B<siglen> bytes at B<sigbuf>.
 
+EVP_VerifyFinal_with_libctx() is similar to EVP_VerifyFinal() but also passes
+the library context I<libctx> and the property query I<propq> to use when
+creating a context to use with the key I<pkey>. EVP_VerifyFinal() uses NULL
+values for these fields.
+
 EVP_VerifyInit() initializes verification context B<ctx> to use the default
 implementation of digest B<type>.
 
@@ -41,8 +49,8 @@ implementation of digest B<type>.
 EVP_VerifyInit_ex() and EVP_VerifyUpdate() return 1 for success and 0 for
 failure.
 
-EVP_VerifyFinal() returns 1 for a correct signature, 0 for failure and -1 if some
-other error occurred.
+EVP_VerifyFinal() and EVP_VerifyFinal()_with_libctx return 1 for a correct
+signature, 0 for failure and -1 if some other error occurred.
 
 The error codes can be obtained by L<ERR_get_error(3)>.
 
@@ -82,6 +90,10 @@ L<EVP_DigestInit(3)>,
 L<evp(7)>, L<HMAC(3)>, L<MD2(3)>,
 L<MD5(3)>, L<MDC2(3)>, L<RIPEMD160(3)>,
 L<SHA1(3)>, L<openssl-dgst(1)>
+
+head1 HISTORY
+
+The function EVP_VerifyFinal_with_libctx() was added in OpenSSL 3.0.
 
 =head1 COPYRIGHT
 

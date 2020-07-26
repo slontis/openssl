@@ -458,7 +458,6 @@ int ecdh_plain_derive(void *vpecdhctx, unsigned char *secret,
     return ret;
 }
 
-#ifndef FIPS_MODULE
 static ossl_inline
 int ecdh_X9_63_kdf_derive(void *vpecdhctx, unsigned char *secret,
                           size_t *psecretlen, size_t outlen)
@@ -489,7 +488,9 @@ int ecdh_X9_63_kdf_derive(void *vpecdhctx, unsigned char *secret,
                         stmp, stmplen,
                         pecdhctx->kdf_ukm,
                         pecdhctx->kdf_ukmlen,
-                        pecdhctx->kdf_md))
+                        pecdhctx->kdf_md,
+                        pecdhctx->libctx,
+                        NULL))
         goto err;
     *psecretlen = pecdhctx->kdf_outlen;
     ret = 1;
@@ -498,7 +499,6 @@ int ecdh_X9_63_kdf_derive(void *vpecdhctx, unsigned char *secret,
     OPENSSL_secure_clear_free(stmp, stmplen);
     return ret;
 }
-#endif /* FIPS_MODULE */
 
 static
 int ecdh_derive(void *vpecdhctx, unsigned char *secret,
@@ -509,19 +509,13 @@ int ecdh_derive(void *vpecdhctx, unsigned char *secret,
     switch (pecdhctx->kdf_type) {
         case PROV_ECDH_KDF_NONE:
             return ecdh_plain_derive(vpecdhctx, secret, psecretlen, outlen);
-#ifndef FIPS_MODULE
         case PROV_ECDH_KDF_X9_63:
             return ecdh_X9_63_kdf_derive(vpecdhctx, secret, psecretlen, outlen);
-
-#endif /* FIPS_MODULE */
         default:
             break;
     }
-
     return 0;
 }
-
-
 
 const OSSL_DISPATCH ecdh_keyexch_functions[] = {
     { OSSL_FUNC_KEYEXCH_NEWCTX, (void (*)(void))ecdh_newctx },

@@ -71,6 +71,9 @@ int cms_env_asn1_ctrl(CMS_RecipientInfo *ri, int cmd)
             return 0;
     } else
         return 0;
+    /* Do a downgrade */
+    EVP_PKEY_get0(pkey);
+
     if (pkey->ameth == NULL || pkey->ameth->pkey_ctrl == NULL)
         return 1;
     i = pkey->ameth->pkey_ctrl(pkey, ASN1_PKEY_CTRL_CMS_ENVELOPE, cmd, ri);

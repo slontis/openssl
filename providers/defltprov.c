@@ -369,6 +369,7 @@ static const OSSL_ALGORITHM deflt_asym_cipher[] = {
 static const OSSL_ALGORITHM deflt_keymgmt[] = {
 #ifndef OPENSSL_NO_DH
     { "DH:dhKeyAgreement", "provider=default", dh_keymgmt_functions },
+    { "DHX:dhpublicnumber:X9.42 DH", "provider=default", dhx_keymgmt_functions },
 #endif
 #ifndef OPENSSL_NO_DSA
     { "DSA:dsaEncryption", "provider=default", dsa_keymgmt_functions },
@@ -434,6 +435,25 @@ static const OSSL_ALGORITHM deflt_serializer[] = {
     { "DH", "provider=default,fips=yes,format=pem,type=public",
       dh_pub_pem_serializer_functions },
     { "DH", "provider=default,fips=yes,format=pem,type=parameters",
+      dh_param_pem_serializer_functions },
+
+    { "DHX", "provider=default,fips=yes,format=text,type=private",
+      dh_priv_text_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=text,type=public",
+      dh_pub_text_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=text,type=parameters",
+      dh_param_text_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=der,type=private",
+      dh_priv_der_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=der,type=public",
+      dh_pub_der_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=der,type=parameters",
+      dh_param_der_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=pem,type=private",
+      dh_priv_pem_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=pem,type=public",
+      dh_pub_pem_serializer_functions },
+    { "DHX", "provider=default,fips=yes,format=pem,type=parameters",
       dh_param_pem_serializer_functions },
 #endif
 

@@ -667,3 +667,35 @@ const OSSL_DISPATCH dh_keymgmt_functions[] = {
     { OSSL_FUNC_KEYMGMT_EXPORT_TYPES, (void (*)(void))dh_export_types },
     { 0, NULL }
 };
+
+/* For any DH key, we use the "DH" algorithms regardless of sub-type. */
+static const char *dhx_query_operation_name(int operation_id)
+{
+    return "DH";
+}
+
+const OSSL_DISPATCH dhx_keymgmt_functions[] = {
+    { OSSL_FUNC_KEYMGMT_NEW, (void (*)(void))dh_newdata },
+    { OSSL_FUNC_KEYMGMT_GEN_INIT, (void (*)(void))dh_gen_init },
+    { OSSL_FUNC_KEYMGMT_GEN_SET_TEMPLATE, (void (*)(void))dh_gen_set_template },
+    { OSSL_FUNC_KEYMGMT_GEN_SET_PARAMS, (void (*)(void))dh_gen_set_params },
+    { OSSL_FUNC_KEYMGMT_GEN_SETTABLE_PARAMS,
+      (void (*)(void))dh_gen_settable_params },
+    { OSSL_FUNC_KEYMGMT_GEN, (void (*)(void))dh_gen },
+    { OSSL_FUNC_KEYMGMT_GEN_CLEANUP, (void (*)(void))dh_gen_cleanup },
+    { OSSL_FUNC_KEYMGMT_FREE, (void (*)(void))dh_freedata },
+    { OSSL_FUNC_KEYMGMT_GET_PARAMS, (void (*) (void))dh_get_params },
+    { OSSL_FUNC_KEYMGMT_GETTABLE_PARAMS, (void (*) (void))dh_gettable_params },
+    { OSSL_FUNC_KEYMGMT_SET_PARAMS, (void (*) (void))dh_set_params },
+    { OSSL_FUNC_KEYMGMT_SETTABLE_PARAMS, (void (*) (void))dh_settable_params },
+    { OSSL_FUNC_KEYMGMT_HAS, (void (*)(void))dh_has },
+    { OSSL_FUNC_KEYMGMT_MATCH, (void (*)(void))dh_match },
+    { OSSL_FUNC_KEYMGMT_VALIDATE, (void (*)(void))dh_validate },
+    { OSSL_FUNC_KEYMGMT_IMPORT, (void (*)(void))dh_import },
+    { OSSL_FUNC_KEYMGMT_IMPORT_TYPES, (void (*)(void))dh_import_types },
+    { OSSL_FUNC_KEYMGMT_EXPORT, (void (*)(void))dh_export },
+    { OSSL_FUNC_KEYMGMT_EXPORT_TYPES, (void (*)(void))dh_export_types },
+    { OSSL_FUNC_KEYMGMT_QUERY_OPERATION_NAME,
+      (void (*)(void))dhx_query_operation_name },
+    { 0, NULL }
+};

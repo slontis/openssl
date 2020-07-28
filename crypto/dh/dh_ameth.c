@@ -568,6 +568,27 @@ static int dh_pkey_import_from(const OSSL_PARAM params[], void *vpctx)
     return 1;
 }
 
+static int dhx_pkey_import_from(const OSSL_PARAM params[], void *vpctx)
+{
+    EVP_PKEY_CTX *pctx = vpctx;
+    EVP_PKEY *pkey = EVP_PKEY_CTX_get0_pkey(pctx);
+    DH *dh = dh_new_with_libctx(pctx->libctx);
+
+    if (dh == NULL) {
+        ERR_raise(ERR_LIB_DH, ERR_R_MALLOC_FAILURE);
+        return 0;
+    }
+
+    if (!dh_ffc_params_fromdata(dh, params)
+        || !dh_key_fromdata(dh, params)
+        || !EVP_PKEY_assign(pkey, EVP_PKEY_DHX, dh)) {
+        DH_free(dh);
+        return 0;
+    }
+    return 1;
+}
+
+
 const EVP_PKEY_ASN1_METHOD dh_asn1_meth = {
     EVP_PKEY_DH,
     EVP_PKEY_DH,
@@ -649,7 +670,13 @@ const EVP_PKEY_ASN1_METHOD dhx_asn1_meth = {
 
     0,
     dh_pkey_public_check,
-    dh_pkey_param_check
+    dh_pkey_param_check,
+
+    0, 0, 0, 0,
+
+    dh_pkey_dirty_cnt,
+    dh_pkey_export_to,
+    dhx_pkey_import_from,
 };
 
 #ifndef OPENSSL_NO_CMS

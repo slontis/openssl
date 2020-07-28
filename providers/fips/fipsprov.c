@@ -392,7 +392,7 @@ static const OSSL_ALGORITHM fips_rands[] = {
 
 static const OSSL_ALGORITHM fips_keyexch[] = {
 #ifndef OPENSSL_NO_DH
-    { "DH:dhKeyAgreement", FIPS_DEFAULT_PROPERTIES, dh_keyexch_functions },
+    { "DH:dhKeyAgreement:dhpublicnumber", FIPS_DEFAULT_PROPERTIES, dh_keyexch_functions },
 #endif
 #ifndef OPENSSL_NO_EC
     { "ECDH", FIPS_DEFAULT_PROPERTIES, ecdh_keyexch_functions },
@@ -422,7 +422,7 @@ static const OSSL_ALGORITHM fips_asym_cipher[] = {
 
 static const OSSL_ALGORITHM fips_keymgmt[] = {
 #ifndef OPENSSL_NO_DH
-    { "DH:dhKeyAgreement", FIPS_DEFAULT_PROPERTIES, dh_keymgmt_functions },
+    { "DH:dhKeyAgreement:dhpublicnumber", FIPS_DEFAULT_PROPERTIES, dh_keymgmt_functions },
 #endif
 #ifndef OPENSSL_NO_DSA
     { "DSA", FIPS_DEFAULT_PROPERTIES, dsa_keymgmt_functions },

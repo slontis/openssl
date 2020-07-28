@@ -578,18 +578,18 @@ my @smime_cms_param_tests = (
       [ "{cmd2}", @prov, "-decrypt", "-recip", catfile($smdir, "smec2.pem"),
         "-in", "{output}.cms", "-out", "{output}.txt" ],
       \&final_compare
-    ]
+    ],
 
     # TODO(3.0) Add this test back in when "dhpublicnumber" is supported
     # in the keymanger.
-    #[ "enveloped content test streaming S/MIME format, X9.42 DH",
-    #  [ "{cmd1}", @prov, "-encrypt", "-in", $smcont,
-    #    "-stream", "-out", "{output}.cms",
-    #    "-recip", catfile($smdir, "smdh.pem"), "-aes128" ],
-    #  [ "{cmd2}", "-decrypt", "-recip", catfile($smdir, "smdh.pem"),
-    #    "-in", "{output}.cms", "-out", "{output}.txt" ],
-    #  \&final_compare
-    #]
+    [ "enveloped content test streaming S/MIME format, X9.42 DH",
+      [ "{cmd1}", @prov, "-encrypt", "-in", $smcont,
+        "-stream", "-out", "{output}.cms",
+        "-recip", catfile($smdir, "smdh.pem"), "-aes128" ],
+      [ "{cmd2}", "-decrypt", "-recip", catfile($smdir, "smdh.pem"),
+        "-in", "{output}.cms", "-out", "{output}.txt" ],
+      \&final_compare
+    ]
 );
 
 my @contenttype_cms_test = (

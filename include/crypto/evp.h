@@ -808,6 +808,7 @@ EVP_MD_CTX *evp_md_ctx_new_with_libctx(EVP_PKEY *pkey,
                                        const ASN1_OCTET_STRING *id,
                                        OPENSSL_CTX *libctx, const char *propq);
 int evp_pkey_name2type(const char *name);
+ECX_KEY *evp_pkey_get1_ECX_KEY(EVP_PKEY *pkey, int type);
 
 int evp_pkey_ctx_set1_id_prov(EVP_PKEY_CTX *ctx, const void *id, int len);
 int evp_pkey_ctx_get1_id_prov(EVP_PKEY_CTX *ctx, void *id);

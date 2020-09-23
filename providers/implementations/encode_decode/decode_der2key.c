@@ -25,6 +25,7 @@
 #include "internal/cryptlib.h"   /* ossl_assert() */
 #include "internal/asn1.h"
 #include "crypto/ecx.h"
+#include "crypto/evp.h"
 #include "prov/bio.h"
 #include "prov/implementations.h"
 #include "prov/providercommonerr.h"
@@ -281,6 +282,13 @@ static int der2key_export_object(void *vctx,
         { 0, NULL }                                                     \
     }
 
+#define IMPLEMENT_ECX_NEWCTX(KEYTYPEstr, KEYTYPE, keytype, free)               \
+static ECX_KEY *evp_pkey_get1_##keytype(EVP_PKEY *pkey)                        \
+{                                                                              \
+    return evp_pkey_get1_ECX_KEY(pkey, EVP_PKEY_##KEYTYPE);                    \
+}                                                                              \
+IMPLEMENT_NEWCTX(KEYTYPEstr, KEYTYPE, keytype, evp_pkey_get1_##keytype, free)
+
 #ifndef OPENSSL_NO_DH
 IMPLEMENT_NEWCTX("DH", DH, dh, EVP_PKEY_get1_DH, DH_free);
 IMPLEMENT_NEWCTX("DHX", DHX, dhx, EVP_PKEY_get1_DH, DH_free);
@@ -290,13 +298,10 @@ IMPLEMENT_NEWCTX("DSA", DSA, dsa, EVP_PKEY_get1_DSA, DSA_free);
 #endif
 #ifndef OPENSSL_NO_EC
 IMPLEMENT_NEWCTX("EC", EC, ec, EVP_PKEY_get1_EC_KEY, EC_KEY_free);
-IMPLEMENT_NEWCTX("X25519", X25519, x25519,
-                 EVP_PKEY_get1_X25519, ecx_key_free);
-IMPLEMENT_NEWCTX("X448", X448, x448,
-                 EVP_PKEY_get1_X448, ecx_key_free);
-IMPLEMENT_NEWCTX("ED25519", ED25519, ed25519,
-                 EVP_PKEY_get1_ED25519, ecx_key_free);
-IMPLEMENT_NEWCTX("ED448", ED448, ed448, EVP_PKEY_get1_ED448, ecx_key_free);
+IMPLEMENT_ECX_NEWCTX("X25519", X25519, x25519, ecx_key_free);
+IMPLEMENT_ECX_NEWCTX("X448", X448, x448, ecx_key_free);
+IMPLEMENT_ECX_NEWCTX("ED25519", ED25519, ed25519, ecx_key_free);
+IMPLEMENT_ECX_NEWCTX("ED448", ED448, ed448, ecx_key_free);
 #endif
 IMPLEMENT_NEWCTX("RSA", RSA, rsa, EVP_PKEY_get1_RSA, RSA_free);
 IMPLEMENT_NEWCTX("RSA-PSS", RSA_PSS, rsapss, EVP_PKEY_get1_RSA, RSA_free);

@@ -870,16 +870,10 @@ EC_KEY *EVP_PKEY_get1_EC_KEY(EVP_PKEY *pkey)
     return ret;
 }
 
-static int EVP_PKEY_set1_ECX_KEY(EVP_PKEY *pkey, int type, ECX_KEY *key)
+ECX_KEY *evp_pkey_get1_ECX_KEY(EVP_PKEY *pkey, int type)
 {
-    int ret = EVP_PKEY_assign(pkey, type, key);
-    if (ret)
-        ecx_key_up_ref(key);
-    return ret;
-}
+    ECX_KEY *ret = NULL;
 
-static ECX_KEY *EVP_PKEY_get0_ECX_KEY(const EVP_PKEY *pkey, int type)
-{
     if (!evp_pkey_downgrade((EVP_PKEY *)pkey)) {
         ERR_raise(ERR_LIB_EVP, EVP_R_INACCESSIBLE_KEY);
         return NULL;
@@ -888,36 +882,12 @@ static ECX_KEY *EVP_PKEY_get0_ECX_KEY(const EVP_PKEY *pkey, int type)
         ERR_raise(ERR_LIB_EVP, EVP_R_EXPECTING_A_ECX_KEY);
         return NULL;
     }
-    return pkey->pkey.ecx;
-}
-
-static ECX_KEY *EVP_PKEY_get1_ECX_KEY(EVP_PKEY *pkey, int type)
-{
-    ECX_KEY *ret = EVP_PKEY_get0_ECX_KEY(pkey, type);
+    ret = pkey->pkey.ecx;
     if (ret != NULL)
         ecx_key_up_ref(ret);
     return ret;
 }
-
-#  define IMPLEMENT_ECX_VARIANT(NAME)                                   \
-    int EVP_PKEY_set1_##NAME(EVP_PKEY *pkey, ECX_KEY *key)              \
-    {                                                                   \
-        return EVP_PKEY_set1_ECX_KEY(pkey, EVP_PKEY_##NAME, key);       \
-    }                                                                   \
-    ECX_KEY *EVP_PKEY_get0_##NAME(const EVP_PKEY *pkey)                 \
-    {                                                                   \
-        return EVP_PKEY_get0_ECX_KEY(pkey, EVP_PKEY_##NAME);            \
-    }                                                                   \
-    ECX_KEY *EVP_PKEY_get1_##NAME(EVP_PKEY *pkey)                       \
-    {                                                                   \
-        return EVP_PKEY_get1_ECX_KEY(pkey, EVP_PKEY_##NAME);            \
-    }
-IMPLEMENT_ECX_VARIANT(X25519)
-IMPLEMENT_ECX_VARIANT(X448)
-IMPLEMENT_ECX_VARIANT(ED25519)
-IMPLEMENT_ECX_VARIANT(ED448)
-
-# endif
+# endif /* OPENSSL_NO_EC */
 
 # ifndef OPENSSL_NO_DH
 

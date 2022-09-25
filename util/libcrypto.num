@@ -5466,3 +5466,23 @@ EVP_PKEY_auth_decapsulate_init          ?	3_2_0	EXIST::FUNCTION:
 PKCS12_SAFEBAG_set0_attrs               ?	3_2_0	EXIST::FUNCTION:
 PKCS12_create_ex2                       ?	3_2_0	EXIST::FUNCTION:
 OSSL_sleep                              ?	3_2_0	EXIST::FUNCTION:
+OSSL_HPKE_keygen                        ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_enc                           ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_dec                           ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_expansion                     ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_suite_check                   ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_good4grease                   ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_str2suite                     ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_set1_seq                  ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_export                    ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_free                      ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_get0_seq                  ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_new                       ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_set1_authpriv             ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_set1_authpub              ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_set1_psk                  ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_set1_senderpriv           ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_recipient_open                ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_sender_seal                   ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_CTX_set1_ikme                 ?	3_1_0	EXIST::FUNCTION:
+>>>>>>> 1e63be34d0 (uses DHKEM but before resolving overlapping old code)

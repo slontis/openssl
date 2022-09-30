@@ -311,6 +311,7 @@ const RAND_METHOD *RAND_get_rand_method(void)
 # endif
 #endif /* !FIPS_MODULE */
 
+
 /*
  * This function is not part of RAND_METHOD, so if we're not using
  * the default method, then just call RAND_bytes().  Otherwise make
@@ -332,9 +333,9 @@ int RAND_priv_bytes_ex(OSSL_LIB_CTX *ctx, unsigned char *buf, size_t num,
 #endif
 
     rand = RAND_get0_private(ctx);
-    if (rand != NULL)
+    if (rand != NULL) {
         return EVP_RAND_generate(rand, buf, num, strength, 0, NULL, 0);
-
+    }
     return 0;
 }
 

@@ -99,6 +99,7 @@ int RAND_load_file(const char *file, long max_bytes);
 int RAND_write_file(const char *file);
 const char *RAND_file_name(char *file, size_t num);
 int RAND_status(void);
+void RAND_print_bytes(void);
 
 # ifndef OPENSSL_NO_EGD
 int RAND_query_egd_bytes(const char *path, unsigned char *buf, int bytes);

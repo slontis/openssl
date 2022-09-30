@@ -117,7 +117,8 @@ static int bn_rsa_fips186_4_find_aux_prob_prime(const BIGNUM *Xp1,
         i++;
         BN_GENCB_call(cb, 0, i);
         /* MR test with trial division */
-        tmp = BN_check_prime(p1, ctx, cb);
+        //tmp = BN_check_prime(p1, ctx, cb);
+        tmp = ossl_bn_check_prime(p1, 27, ctx, 1, cb);
         if (tmp > 0)
             break;
         if (tmp < 0)
@@ -341,7 +342,7 @@ int ossl_bn_rsa_fips186_4_derive_prime(BIGNUM *Y, BIGNUM *X, const BIGNUM *Xin,
                     || !BN_gcd(tmp, y1, e, ctx))
                 goto err;
             if (BN_is_one(tmp)) {
-                int rv = BN_check_prime(Y, ctx, cb);
+                int rv = ossl_bn_check_prime(Y, 3, ctx, 1, cb);
 
                 if (rv > 0)
                     goto end;

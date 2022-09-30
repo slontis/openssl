@@ -50,7 +50,7 @@ int RSA_generate_key_ex(RSA *rsa, int bits, BIGNUM *e_value, BN_GENCB *cb)
 int RSA_generate_multi_prime_key(RSA *rsa, int bits, int primes,
                                  BIGNUM *e_value, BN_GENCB *cb)
 {
-#ifndef FIPS_MODULE
+#if 0 //ndef FIPS_MODULE
     /* multi-prime is only supported with the builtin key generation */
     if (rsa->meth->rsa_multi_prime_keygen != NULL) {
         return rsa->meth->rsa_multi_prime_keygen(rsa, bits, primes,
@@ -71,7 +71,7 @@ int RSA_generate_multi_prime_key(RSA *rsa, int bits, int primes,
     return rsa_keygen(rsa->libctx, rsa, bits, primes, e_value, cb, 0);
 }
 
-#ifndef FIPS_MODULE
+#if 0 //ndef FIPS_MODULE
 static int rsa_multiprime_keygen(RSA *rsa, int bits, int primes,
                                  BIGNUM *e_value, BN_GENCB *cb)
 {
@@ -426,7 +426,7 @@ static int rsa_keygen(OSSL_LIB_CTX *libctx, RSA *rsa, int bits, int primes,
 {
     int ok = 0;
 
-#ifdef FIPS_MODULE
+#if 1    // ifdef FIPS_MODULE
     ok = ossl_rsa_sp800_56b_generate_key(rsa, bits, e_value, cb);
     pairwise_test = 1; /* FIPS MODE needs to always run the pairwise test */
 #else

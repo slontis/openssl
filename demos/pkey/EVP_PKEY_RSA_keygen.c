@@ -22,6 +22,10 @@
 #include <openssl/rsa.h>
 #include <openssl/core_names.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
+
+#include "rand2.txt"
+#define OVERRIDE_RAND
 
 /* A property query used for selecting algorithm implementations. */
 static const char *propq = NULL;
@@ -266,12 +270,31 @@ int main(int argc, char **argv)
     if (bits < 2048)
         fprintf(stderr, "Warning: very weak key size\n\n");
 
+#ifdef OVERRIDE_RAND
+    RAND_set_DRBG_type(NULL, "TEST-RAND", NULL, NULL, NULL);
+    {
+        EVP_RAND_CTX *ctx;
+        OSSL_PARAM params[2], *p = params;
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_RAND_PARAM_TEST_ENTROPY,
+                                                 entropy, sizeof(entropy));
+        *p = OSSL_PARAM_construct_end();
+        ctx = RAND_get0_private(NULL);
+        EVP_RAND_CTX_set_params(ctx, params);
+        ctx = RAND_get0_public(NULL);
+        EVP_RAND_CTX_set_params(ctx, params);
+    }
+#endif
+
+
     /* Generate RSA key. */
-    if (use_short)
-        pkey = generate_rsa_key_short(libctx, bits);
-    else
+    //if (use_short)
+    //    pkey = generate_rsa_key_short(libctx, bits);
+    //else
         pkey = generate_rsa_key_long(libctx, bits);
 
+#ifndef OVERRIDE_RAND
+    RAND_print_bytes();
+#endif
     if (pkey == NULL)
         goto cleanup;
 

@@ -569,6 +569,25 @@ static int evp_rand_generate_locked(EVP_RAND_CTX *ctx, unsigned char *out,
     return 1;
 }
 
+static int rand_buffer_index = 0;
+static unsigned char rand_buffer[500 * 1024];
+
+void RAND_print_bytes(void)
+{
+    FILE *fp = fopen("rand.txt", "wt");
+    if (fp != NULL) {
+        fprintf(fp, "const unsigned char entropy[%d] = {\n", rand_buffer_index);
+        int i;
+        for (i = 0; i < rand_buffer_index; ++i) {
+            fprintf(fp, "0x%02x, ", rand_buffer[i]);
+            if (i != 0 && i % 16 == 0)
+                fprintf(fp, "\n");
+        }
+        fprintf(fp, "\n};\n");
+        fclose(fp);
+    }
+}
+
 int EVP_RAND_generate(EVP_RAND_CTX *ctx, unsigned char *out, size_t outlen,
                       unsigned int strength, int prediction_resistance,
                       const unsigned char *addin, size_t addin_len)
@@ -579,6 +598,10 @@ int EVP_RAND_generate(EVP_RAND_CTX *ctx, unsigned char *out, size_t outlen,
         return 0;
     res = evp_rand_generate_locked(ctx, out, outlen, strength,
                                    prediction_resistance, addin, addin_len);
+    if (rand_buffer_index + outlen < sizeof(rand_buffer)) {
+        memcpy(rand_buffer + rand_buffer_index, out, outlen);
+        rand_buffer_index += outlen;
+    }
     evp_rand_unlock(ctx);
     return res;
 }

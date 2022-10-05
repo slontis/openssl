@@ -1164,71 +1164,6 @@ err:
 }
 
 /*
- * @brief generate a key pair
- *
- * @param libctx is the context to use
- * @param propq is a properties string
- * @param mode is the mode (currently unused)
- * @param suite is the ciphersuite
- * @param publen is the size of the public key buffer (exact length on output)
- * @param pub is the public value
- * @param privlen is the size of the private key buffer (exact length on output)
- * @param priv is the private key
- * @return 1 for good (OpenSSL style), not 1 for error
- */
-static int hpke_kg(OSSL_LIB_CTX *libctx, const char *propq,
-                   unsigned int mode, OSSL_HPKE_SUITE suite,
-                   size_t ikmlen, const unsigned char *ikm,
-                   size_t *publen, unsigned char *pub,
-                   size_t *privlen, unsigned char *priv)
-{
-    int erv = 1; /* Our error return value - 1 is success */
-    EVP_PKEY *skR = NULL;
-    BIO *bfp = NULL;
-    unsigned char lpriv[OSSL_HPKE_MAXSIZE];
-    size_t lprivlen = 0;
-
-    if (hpke_suite_check(suite) != 1)
-        return 0;
-    if (pub == NULL || priv == NULL)
-        return 0;
-    erv = hpke_kg_evp(libctx, propq, mode, suite, ikmlen, ikm,
-                      publen, pub, &skR);
-    if (erv != 1) {
-        return erv;
-    }
-    bfp = BIO_new(BIO_s_mem());
-    if (bfp == NULL) {
-        erv = 0;
-        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
-        goto err;
-    }
-    if (!PEM_write_bio_PrivateKey(bfp, skR, NULL, NULL, 0, NULL, NULL)) {
-        erv = 0;
-        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
-        goto err;
-    }
-    lprivlen = BIO_read(bfp, lpriv, OSSL_HPKE_MAXSIZE);
-    if (lprivlen <= 0) {
-        erv = 0;
-        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
-        goto err;
-    }
-    if (lprivlen > *privlen) {
-        erv = 0;
-        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
-        goto err;
-    }
-    *privlen = lprivlen;
-    memcpy(priv, lpriv, lprivlen);
-
-err:
-    EVP_PKEY_free(skR);
-    BIO_free_all(bfp);
-    return erv;
-}
-
-/*
  * @brief randomly pick a suite
  *
  * @param libctx is the context to use
@@ -1274,8 +1209,8 @@ static int hpke_random_suite(OSSL_LIB_CTX *libctx,
  * @param suite is the chosen or random suite
  * @param pub a random value of the appropriate length for sender public value
  * @param pub_len is the length of pub (buffer size on input)
- * @param cipher buffer with random value of the appropriate length
- * @param cipher_len is the length of cipher
+ * @param ciphertext buffer with random value of the appropriate length
+ * @param ciphertext_len is the length of cipher
  * @return 1 for success, otherwise failure
  */
 static int hpke_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
@@ -1283,8 +1218,8 @@ static int hpke_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
                             OSSL_HPKE_SUITE *suite,
                             unsigned char *pub,
                             size_t *pub_len,
-                            unsigned char *cipher,
-                            size_t cipher_len)
+                            unsigned char *ciphertext,
+                            size_t ciphertext_len)
 {
     OSSL_HPKE_SUITE chosen;
     int crv = 0;
@@ -1293,7 +1228,7 @@ static int hpke_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
     uint16_t kem_ind = 0;
 
     if (pub == NULL || !pub_len
-        || cipher == NULL || !cipher_len || suite == NULL)
+        || ciphertext == NULL || !ciphertext_len || suite == NULL)
         return 0;
     if (suite_in == NULL) {
         /* choose a random suite */
@@ -1319,7 +1254,8 @@ static int hpke_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
     if (RAND_bytes_ex(libctx, pub, plen, OSSL_HPKE_RSTRENGTH) <= 0)
         return 0;
     *pub_len = plen;
-    if (RAND_bytes_ex(libctx, cipher, cipher_len, OSSL_HPKE_RSTRENGTH) <= 0)
+    if (RAND_bytes_ex(libctx, ciphertext, ciphertext_len,
+                      OSSL_HPKE_RSTRENGTH) <= 0)
         return 0;
     return 1;
 err:
@@ -2299,29 +2235,6 @@ int OSSL_HPKE_CTX_export(OSSL_HPKE_CTX *ctx,
     return 1;
 }
 
-/*
- * @brief generate a key pair
- * @param libctx is the context to use
- * @param propq is a properties string
- * @param mode is the mode (currently unused)
- * @param suite is the ciphersuite (currently unused)
- * @param ikmlen is the length of IKM, if supplied
- * @param ikm is IKM, if supplied
- * @param publen is the size of the public key buffer (exact length on output)
- * @param pub is the public value
- * @param privlen is the size of the private key buffer (exact length on output)
- * @param priv is the private key
- * @return 1 for good (OpenSSL style), not-1 for error
- */
-int OSSL_HPKE_keygen_buf(OSSL_LIB_CTX *libctx, const char *propq,
-                         unsigned int mode, OSSL_HPKE_SUITE suite,
-                         const unsigned char *ikm, size_t ikmlen,
-                         unsigned char *pub, size_t *publen,
-                         unsigned char *priv, size_t *privlen)
-{
-    return hpke_kg(libctx, propq, mode, suite, ikmlen, ikm,
-                   publen, pub, privlen, priv);
-}
 
 /*
  * @brief generate a key pair but keep private inside API
@@ -2355,33 +2268,6 @@ int OSSL_HPKE_keygen(OSSL_LIB_CTX *libctx, const char *propq,
 int OSSL_HPKE_suite_check(OSSL_HPKE_SUITE suite)
 {
     return hpke_suite_check(suite);
-}
-
-/*
- * @brief: map a kem_id and a private key buffer into an EVP_PKEY
- *
- * @param libctx is the context to use
- * @param propq is a properties string
- * @param kem_id is what'd you'd expect (using the HPKE registry values)
- * @param prbuf is the private key buffer
- * @param prbuf_len is the length of that buffer
- * @param pubuf is the public key buffer (if available)
- * @param pubuf_len is the length of that buffer
- * @param priv is a pointer to an EVP_PKEY * for the result
- * @return 1 for success, otherwise failure
- *
- * Note that the buffer is expected to be some form of the PEM encoded
- * private key, but could still have the PEM header or not, and might
- * or might not be base64 encoded. We'll try handle all those options.
- */
-int OSSL_HPKE_prbuf2evp(OSSL_LIB_CTX *libctx, const char *propq,
-                        unsigned int kem_id,
-                        const unsigned char *prbuf, size_t prbuf_len,
-                        const unsigned char *pubuf, size_t pubuf_len,
-                        EVP_PKEY **priv)
-{
-    return hpke_prbuf2evp(libctx, propq, kem_id, prbuf, prbuf_len, pubuf,
-                          pubuf_len, priv);
 }
 
 /*
@@ -2510,7 +2396,7 @@ int OSSL_HPKE_enc(OSSL_LIB_CTX *libctx, const char *propq,
     if (seq != NULL) {
         /* need to map to uint64_t and use setter */
         uint64_t sval = 0;
-        int i;
+        size_t i;
 
         if (seqlen > 8) {
             ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
@@ -2627,7 +2513,7 @@ int OSSL_HPKE_dec(OSSL_LIB_CTX *libctx, const char *propq,
     if (seq != NULL) {
         /* need to map to uint64_t and use setter */
         uint64_t sval = 0;
-        int i;
+        size_t i;
 
         if (seqlen > 8) {
             ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);

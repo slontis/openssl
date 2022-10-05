@@ -30,7 +30,7 @@
 #include "prov/securitycheck.h"
 #include "prov/providercommon.h"
 
-#include "crypto/hpke.h"
+#include "internal/hpke_util.h"
 #include "crypto/ec.h"
 #include "prov/ecx.h"
 #include "eckem.h"
@@ -80,6 +80,9 @@ static const DHKEM_ALG dhkem_alg[] = {
     { "P-521", "SHA512", 0x0012, 64, 133, 66, 0x01 },
     { NULL }
 };
+
+/* ASCII: "KEM", in hex for EBCDIC compatibility */
+static const char LABEL_KEM[] = "\x4b\x45\x4d";
 
 /* Return an object containing KEM constants associated with a EC curve name */
 static const DHKEM_ALG *dhkem_ec_find_alg(const char *curve)
@@ -372,7 +375,7 @@ static int dhkem_extract_and_expand(EVP_KDF_CTX *kctx,
                                     const unsigned char *kemctx,
                                     size_t kemctxlen)
 {
-    uint8_t suiteid[5];
+    uint8_t suiteid[2];
     uint8_t prk[EVP_MAX_MD_SIZE];
     size_t prklen = okmlen;
     int ret;
@@ -380,13 +383,14 @@ static int dhkem_extract_and_expand(EVP_KDF_CTX *kctx,
     if (prklen > sizeof(prk))
         return 0;
 
-    ossl_dhkem_getsuiteid(suiteid, kemid);
+    suiteid[0] = kemid / 256;
+    suiteid[1] = kemid % 256;
 
     ret = ossl_hpke_labeled_extract(kctx, prk, prklen,
-                                    NULL, 0, suiteid, sizeof(suiteid),
+                                    NULL, 0, LABEL_KEM, suiteid, sizeof(suiteid),
                                     OSSL_DHKEM_LABEL_EAE_PRK, dhkm, dhkmlen)
           && ossl_hpke_labeled_expand(kctx, okm, okmlen, prk, prklen,
-                                      suiteid, sizeof(suiteid),
+                                      LABEL_KEM, suiteid, sizeof(suiteid),
                                       OSSL_DHKEM_LABEL_SHARED_SECRET,
                                       kemctx, kemctxlen);
     OPENSSL_cleanse(prk, prklen);
@@ -413,7 +417,7 @@ int ossl_ec_dhkem_derive_private(EC_KEY *ec, BIGNUM *priv,
 {
     int ret = 0;
     EVP_KDF_CTX *kdfctx = NULL;
-    uint8_t suiteid[5];
+    uint8_t suiteid[2];
     unsigned char prk[OSSL_HPKE_MAX_SECRET];
     unsigned char privbuf[OSSL_HPKE_MAX_PRIVATE];
     const BIGNUM *order;
@@ -442,10 +446,13 @@ int ossl_ec_dhkem_derive_private(EC_KEY *ec, BIGNUM *priv,
         goto err;
     }
 
-    ossl_dhkem_getsuiteid(suiteid, alg->kemid);
+    // ossl_dhkem_getsuiteid(suiteid, alg->kemid);
+
+    suiteid[0] = alg->kemid / 256;
+    suiteid[1] = alg->kemid % 256;
 
     if (!ossl_hpke_labeled_extract(kdfctx, prk, alg->secretlen,
-                                   NULL, 0, suiteid, sizeof(suiteid),
+                                   NULL, 0, LABEL_KEM, suiteid, sizeof(suiteid),
                                    OSSL_DHKEM_LABEL_DKP_PRK, ikm, ikmlen))
         goto err;
 
@@ -453,7 +460,7 @@ int ossl_ec_dhkem_derive_private(EC_KEY *ec, BIGNUM *priv,
     do {
         if (!ossl_hpke_labeled_expand(kdfctx, privbuf, alg->encodedprivlen,
                                       prk, alg->secretlen,
-                                      suiteid, sizeof(suiteid),
+                                      LABEL_KEM, suiteid, sizeof(suiteid),
                                       OSSL_DHKEM_LABEL_CANDIDATE,
                                       &counter, 1))
             goto err;

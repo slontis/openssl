@@ -18,10 +18,6 @@
 
 # include <openssl/ssl.h>
 
-# ifdef __cplusplus
-extern "C" {
-# endif
-
 /*
  * The HPKE modes
  */
@@ -143,7 +139,6 @@ int OSSL_HPKE_CTX_set1_psk(OSSL_HPKE_CTX *ctx,
  */
 int OSSL_HPKE_CTX_set1_senderpriv(OSSL_HPKE_CTX *ctx, EVP_PKEY *privp);
 
-#ifdef OSSL_KEM_PARAM_OPERATION_DHKEM
 /**
  * @brief set a sender IKM for key DHKEM generation
  * @param ctx is the pointer for the HPKE context
@@ -153,7 +148,6 @@ int OSSL_HPKE_CTX_set1_senderpriv(OSSL_HPKE_CTX *ctx, EVP_PKEY *privp);
  */
 int OSSL_HPKE_CTX_set1_ikme(OSSL_HPKE_CTX *ctx,
                             const unsigned char *ikme, size_t ikmelen);
-#endif
 
 /**
  * @brief set a sender private key for HPKE authenticated modes
@@ -472,7 +466,4 @@ int OSSL_HPKE_dec(OSSL_LIB_CTX *libctx, const char *propq,
                   const unsigned char *seq, size_t seqlen,
                   unsigned char *clear, size_t *clearlen);
 
-# ifdef __cplusplus
-}
-# endif
 #endif

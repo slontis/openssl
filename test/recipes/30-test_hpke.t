@@ -7,7 +7,14 @@
 # in the file LICENSE in the source distribution or at
 # https://www.openssl.org/source/license.html
 
-
+use strict;
+use OpenSSL::Test;              # get 'plan'
 use OpenSSL::Test::Simple;
+use OpenSSL::Test::Utils;
+
+setup("test_hpke");
+
+plan skip_all => "This test is unsupported in a no-ec build"
+    if disabled("ec");
 
 simple_test("test_hpke", "hpke_test");

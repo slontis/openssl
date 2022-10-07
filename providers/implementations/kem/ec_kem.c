@@ -446,8 +446,6 @@ int ossl_ec_dhkem_derive_private(EC_KEY *ec, BIGNUM *priv,
         goto err;
     }
 
-    // ossl_dhkem_getsuiteid(suiteid, alg->kemid);
-
     suiteid[0] = alg->kemid / 256;
     suiteid[1] = alg->kemid % 256;
 

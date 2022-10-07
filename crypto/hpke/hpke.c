@@ -16,13 +16,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#if defined(OPENSSL_SYS_WINDOWS) || defined(OPENSSL_SYS_MSDOS) \
-    || defined(_WIN32)
-#include <winsock.h>
-#else
-#include <arpa/inet.h>
-#endif
-
 #include <openssl/ssl.h>
 #include <openssl/rand.h>
 #include <openssl/kdf.h>
@@ -1212,20 +1205,18 @@ static int hpke_expansion(OSSL_HPKE_SUITE suite,
     return 1;
 }
 
-static int hpke_seq2buf(uint64_t seq, unsigned char *buf, size_t blen)
+static size_t hpke_seq2buf(uint64_t seq, unsigned char *buf, size_t blen)
 {
-    uint64_t nbo_seq = 0;
-    size_t nbo_seq_len = sizeof(nbo_seq);
+    size_t i;
 
-    if (nbo_seq_len > 12 || blen < nbo_seq_len) {
-        /* it'll be some time before we have such a wide int:-) */
-        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+    if (blen < sizeof(seq))
         return 0;
+    for (i = 1; i <= sizeof(seq); i++) {
+        buf[blen - i] = (seq >> (8 * (i-1))) & 0xff;
     }
-    memset(buf, 0, blen);
-    nbo_seq = htonl(seq);
-    memcpy(buf + blen - nbo_seq_len, &nbo_seq, nbo_seq_len);
-    return nbo_seq_len;
+    if (blen > sizeof(seq))
+        memset(buf, 0, blen - sizeof(seq));
+    return blen;
 }
 
 static int hpke_encap(OSSL_HPKE_CTX *ctx, unsigned char *enc, size_t *enclen,

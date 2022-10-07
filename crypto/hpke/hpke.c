@@ -16,10 +16,11 @@
 #include <stdint.h>
 #include <string.h>
 
-#if !defined(OPENSSL_SYS_WINDOWS)
-#include <arpa/inet.h>
-#else
+#if defined(OPENSSL_SYS_WINDOWS) || defined(OPENSSL_SYS_MSDOS) \
+    || defined(_WIN32)
 #include <winsock.h>
+#else
+#include <arpa/inet.h>
 #endif
 
 #include <openssl/ssl.h>

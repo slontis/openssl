@@ -367,7 +367,6 @@ int ossl_ecx_dhkem_derive_private(ECX_KEY *ecx, unsigned char *privout,
     if (kdfctx == NULL)
         return 0;
 
-    // ossl_dhkem_getsuiteid(suiteid, kemid);
     suiteid[0] = kemid / 256;
     suiteid[1] = kemid % 256;
 

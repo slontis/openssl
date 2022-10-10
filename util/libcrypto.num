@@ -5469,7 +5469,6 @@ OSSL_sleep                              ?	3_2_0	EXIST::FUNCTION:
 OSSL_HPKE_keygen                        ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_enc                           ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_dec                           ?	3_1_0	EXIST::FUNCTION:
-OSSL_HPKE_expansion                     ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_suite_check                   ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_good4grease                   ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_str2suite                     ?	3_1_0	EXIST::FUNCTION:
@@ -5485,3 +5484,5 @@ OSSL_HPKE_CTX_set1_senderpriv           ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_recipient_open                ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_sender_seal                   ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_CTX_set1_ikme                 ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_get_ciphertext_size           ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_get_public_encap_size         ?	3_1_0	EXIST::FUNCTION:

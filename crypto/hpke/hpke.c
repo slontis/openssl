@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2022 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -67,7 +67,6 @@ static const char OSSL_HPKE_SECRET_LABEL[] = "\x73\x65\x63\x72\x65\x74";
 /* "strength" input to RAND_bytes_ex */
 #define OSSL_HPKE_RSTRENGTH 10
 
-/* an error macro just to make things easier */
 
 /*
  * @brief info about an AEAD
@@ -2098,10 +2097,8 @@ int OSSL_HPKE_str2suite(const char *str, OSSL_HPKE_SUITE *suite)
 /*
  * @brief tell the caller how big the cipertext will be
  * @param suite is the suite to be used
- * @param enclen points to what'll be enc length
  * @param clearlen is the length of plaintext
- * @param cipherlen points to what'll be ciphertext length
- * @return 1 for success, otherwise failure
+ * @return the length of the related ciphertext or zero on error
  *
  * AEAD algorithms add a tag for data authentication.
  * Those are almost always, but not always, 16 octets
@@ -2110,12 +2107,39 @@ int OSSL_HPKE_str2suite(const char *str, OSSL_HPKE_SUITE *suite)
  * much data expansion they'll see with a given
  * suite.
  */
-int OSSL_HPKE_expansion(OSSL_HPKE_SUITE suite,
-                        size_t *enclen,
-                        size_t clearlen,
-                        size_t *cipherlen)
+size_t OSSL_HPKE_get_ciphertext_size(OSSL_HPKE_SUITE suite, size_t clearlen)
 {
-    return hpke_expansion(suite, enclen, clearlen, cipherlen);
+    size_t enclen = 0;
+    size_t cipherlen = 0;
+    int rv = 0;
+    rv = hpke_expansion(suite, &enclen, clearlen, &cipherlen);
+    if (rv != 1)
+        return 0;
+    return cipherlen;
+}
+
+/*
+ * @brief tell the caller how big the public value ``enc`` will be
+ * @param suite is the suite to be used
+ * @return size of public encap or zero on error
+ *
+ * AEAD algorithms add a tag for data authentication.
+ * Those are almost always, but not always, 16 octets
+ * long, and who know what'll be true in the future.
+ * So this function allows a caller to find out how
+ * much data expansion they'll see with a given
+ * suite.
+ */
+size_t OSSL_HPKE_get_public_encap_size(OSSL_HPKE_SUITE suite)
+{
+    size_t enclen = 0;
+    size_t cipherlen = 0;
+    size_t clearlen = 16;
+    int rv = 0;
+    rv = hpke_expansion(suite, &enclen, clearlen, &cipherlen);
+    if (rv != 1)
+        return 0;
+    return enclen;
 }
 
 /* the "legacy" enc/dec API functions below here. will likely disappear */

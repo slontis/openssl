@@ -1064,13 +1064,15 @@ static int test_hpke_grease(void)
         overallresult = 0;
     }
     /* expansion */
-    if (TEST_true(OSSL_HPKE_expansion(g_suite, &enclen,
-                                      clearlen, &expanded)) != 1) {
-        overallresult = 0;
-    }
+    expanded = OSSL_HPKE_get_ciphertext_size(g_suite, clearlen);
     if (expanded <= clearlen) {
         overallresult = 0;
     }
+    enclen = OSSL_HPKE_get_public_encap_size(g_suite);
+    if (enclen == 0) {
+        overallresult = 0;
+    }
+
     return overallresult;
 }
 

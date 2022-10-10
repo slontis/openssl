@@ -313,8 +313,8 @@ static int dhkem_extract_and_expand(EVP_KDF_CTX *kctx,
     if (prklen > sizeof(prk))
         return 0;
 
-    suiteid[0] = kemid / 256;
-    suiteid[1] = kemid % 256;
+    suiteid[0] = (kemid >> 8) &0xff;
+    suiteid[1] = kemid & 0xff;
 
     ret = ossl_hpke_labeled_extract(kctx, prk, prklen,
                                     NULL, 0, LABEL_KEM, suiteid, sizeof(suiteid),

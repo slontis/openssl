@@ -126,8 +126,6 @@ static int do_testhpke(const TEST_BASEDATA *base,
     if (!TEST_ptr(sealctx = OSSL_HPKE_CTX_new(base->mode, base->suite,
                                               libctx, propq)))
         goto end;
-    if (!TEST_true(OSSL_HPKE_CTX_set1_senderpriv(sealctx, privE)))
-        goto end;
     if (!TEST_true(OSSL_HPKE_CTX_set1_ikme(sealctx, base->ikmE, base->ikmElen)))
         goto end;
     if (base->mode == OSSL_HPKE_MODE_AUTH
@@ -1182,132 +1180,6 @@ static int test_hpke_grease(void)
     return overallresult;
 }
 
-/**
- * @brief try some fuzzy-ish kg, enc & dec calls
- * @return 1 for success, other otherwise
- */
-static int test_hpke_badcalls(void)
-{
-    int overallresult = 1;
-    int hpke_mode = OSSL_HPKE_MODE_BASE;
-    OSSL_HPKE_SUITE hpke_suite = OSSL_HPKE_SUITE_DEFAULT;
-    unsigned char buf1[OSSL_HPKE_MAXSIZE];
-    unsigned char buf2[OSSL_HPKE_MAXSIZE];
-    unsigned char buf3[OSSL_HPKE_MAXSIZE];
-    size_t aadlen = 0;
-    unsigned char *aadp = NULL;
-    size_t infolen = 0;
-    unsigned char *infop = NULL;
-    size_t seqlen = 0;
-    unsigned char *seqp = NULL;
-    size_t psklen = 0;
-    unsigned char *pskp = NULL;
-    char *pskidp = NULL;
-    size_t publen = 0;
-    unsigned char *pub = NULL;
-    EVP_PKEY *privp = NULL;
-    size_t senderpublen = 0;
-    unsigned char *senderpub = NULL;
-    size_t plainlen = 0;
-    unsigned char *plain = NULL;
-    size_t cipherlen = 0;
-    unsigned char *cipher = NULL;
-    size_t clearlen = 0;
-    unsigned char *clear = NULL;
-    size_t authpublen = 0;
-    unsigned char *authpubp = NULL;
-    size_t authprivlen = 0;
-    unsigned char *authprivp = NULL;
-
-    /* pub is NULL now */
-    if (TEST_false(OSSL_HPKE_keygen(testctx, NULL, hpke_mode, hpke_suite,
-                                    NULL, 0, pub, &publen, &privp)) != 1) {
-        overallresult = 0;
-    }
-
-    pub = buf1;
-    publen = sizeof(buf1);
-    /* bogus kem_id */
-    hpke_suite.kem_id = 100;
-    if (TEST_false(OSSL_HPKE_keygen(testctx, NULL, hpke_mode, hpke_suite,
-                                    NULL, 0, pub, &publen, &privp)) != 1) {
-        overallresult = 0;
-    }
-
-    /* a good key to tee up bad calls below */
-    hpke_suite.kem_id = 0x20;
-    if (TEST_true(OSSL_HPKE_keygen(testctx, NULL, hpke_mode, hpke_suite,
-                                   NULL, 0, pub, &publen, &privp)) != 1) {
-        overallresult = 0;
-    }
-
-    if (TEST_false(OSSL_HPKE_enc(testctx, NULL, hpke_mode, hpke_suite,
-                                 pskidp, pskp, psklen,
-                                 pub, publen,
-                                 authprivp, authprivlen, NULL,
-                                 plain, plainlen,
-                                 aadp, aadlen,
-                                 infop, infolen,
-                                 seqp, seqlen,
-                                 senderpub, &senderpublen, NULL,
-                                 cipher, &cipherlen)) != 1) {
-        overallresult = 0;
-    }
-    if (TEST_false(OSSL_HPKE_dec(testctx, NULL, hpke_mode, hpke_suite,
-                                 pskidp, pskp, psklen,
-                                 authpubp, authpublen,
-                                 NULL, 0, privp,
-                                 senderpub, senderpublen,
-                                 cipher, cipherlen,
-                                 aadp, aadlen,
-                                 infop, infolen,
-                                 seqp, seqlen,
-                                 clear, &clearlen)) != 1) {
-        overallresult = 0;
-    }
-    if (TEST_false(OSSL_HPKE_enc(testctx, NULL, hpke_mode, hpke_suite,
-                                 pskidp, pskp, psklen,
-                                 pub, publen,
-                                 authprivp, authprivlen, NULL,
-                                 plain, plainlen,
-                                 aadp, aadlen,
-                                 infop, infolen,
-                                 seqp, seqlen,
-                                 senderpub, &senderpublen, NULL,
-                                 cipher, &cipherlen)) != 1) {
-        overallresult = 0;
-    }
-
-    if (overallresult != 1) {
-        EVP_PKEY_free(privp);
-        return overallresult;
-    }
-
-    /* same cipher and senderpub buffer */
-    plain = buf2;
-    plainlen = sizeof(buf2) - 64; /* leave room for tag */
-    memset(plain, 0, plainlen);
-    cipher = buf3;
-    cipherlen = sizeof(buf3);
-    memset(cipher, 0, cipherlen);
-    senderpub = buf3;
-    senderpublen = sizeof(buf3);
-    if (TEST_true(OSSL_HPKE_enc(testctx, NULL, hpke_mode, hpke_suite,
-                                pskidp, pskp, psklen,
-                                pub, publen,
-                                authprivp, authprivlen, NULL,
-                                plain, plainlen,
-                                aadp, aadlen,
-                                infop, infolen,
-                                seqp, seqlen,
-                                senderpub, &senderpublen, NULL,
-                                cipher, &cipherlen)) != 1) {
-        overallresult = 0;
-    }
-    EVP_PKEY_free(privp);
-    return overallresult;
-}
-
 /* from RFC 9180 Appendix A.1.1 */
 static unsigned char ikm25519[] = {
     0x72, 0x68, 0x60, 0x0d, 0x40, 0x3f, 0xce, 0x43,
@@ -1484,10 +1356,6 @@ static int test_hpke(void)
         return res;
 
     res = test_hpke_grease();
-    if (res != 1)
-        return res;
-
-    res = test_hpke_badcalls();
     if (res != 1)
         return res;
 

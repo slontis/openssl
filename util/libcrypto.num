@@ -5486,3 +5486,5 @@ OSSL_HPKE_sender_seal                   ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_CTX_set1_ikme                 ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_get_ciphertext_size           ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_get_public_encap_size         ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_sender_export_encap           ?	3_2_0	EXIST::FUNCTION:
+OSSL_HPKE_recipient_export_decap        ?	3_2_0	EXIST::FUNCTION:

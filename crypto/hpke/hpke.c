@@ -672,6 +672,15 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
     }
     EVP_PKEY_CTX_free(pctx);
     pctx = NULL;
+#undef NEWWAY
+#ifdef NEWWAY
+    if (EVP_PKEY_get_octet_string_param(skR, OSSL_PKEY_PARAM_PUB_KEY,
+                                        lpub, *publen, publen) != 1) {
+        erv = 0;
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
+#else
     lpublen = EVP_PKEY_get1_encoded_public_key(skR, &lpub);
     if (lpub == NULL || lpublen == 0) {
         erv = 0;
@@ -685,6 +694,7 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
     }
     *publen = lpublen;
     memcpy(pub, lpub, lpublen);
+#endif
     *priv = skR;
 
 err:

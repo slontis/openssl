@@ -5470,7 +5470,7 @@ OSSL_HPKE_keygen                        ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_enc                           ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_dec                           ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_suite_check                   ?	3_1_0	EXIST::FUNCTION:
-OSSL_HPKE_good4grease                   ?	3_1_0	EXIST::FUNCTION:
+OSSL_HPKE_get_grease_value              ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_str2suite                     ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_CTX_set1_seq                  ?	3_1_0	EXIST::FUNCTION:
 OSSL_HPKE_CTX_export                    ?	3_1_0	EXIST::FUNCTION:

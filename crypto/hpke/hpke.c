@@ -207,10 +207,10 @@ static uint16_t kem_iana2index(uint16_t codepoint)
 }
 
 /*
- * @brief map from IANA codepoint to AEAD table index
+ * @brief map from IANA codepoint to KDF table index
  *
  * @param codepoint should be an IANA code point
- * @return index in AEAD table or 0 if error
+ * @return index in KDF table or 0 if error
  */
 static uint16_t kdf_iana2index(uint16_t codepoint)
 {
@@ -295,9 +295,9 @@ static EVP_PKEY * EVP_PKEY_new_raw_nist_public_key(OSSL_LIB_CTX *libctx,
 
 err:
     EVP_PKEY_CTX_free(cctx);
-    if (erv == 1)
+    if (erv == 1) {
         return ret;
-    else {
+    } else {
         EVP_PKEY_free(ret);
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         return NULL;
@@ -897,10 +897,9 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
-    if (ikm != NULL) {
+    if (ikm != NULL)
         *p++ = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_DHKEM_IKM,
                                                  (char *)ikm, ikmlen);
-    }
     *p = OSSL_PARAM_construct_end();
     if (EVP_PKEY_CTX_set_params(pctx, params) <= 0) {
         erv = 0;
@@ -986,7 +985,7 @@ static int hpke_random_suite(OSSL_LIB_CTX *libctx,
  * @param ciphertext_len is the length of cipher
  * @return 1 for success, otherwise failure
  */
-static int hpke_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
+static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
                             OSSL_HPKE_SUITE *suite_in,
                             OSSL_HPKE_SUITE *suite,
                             unsigned char *pub,
@@ -2071,7 +2070,7 @@ int OSSL_HPKE_suite_check(OSSL_HPKE_SUITE suite)
  * @param cipher_len is the length of cipher
  * @return 1 for success, otherwise failure
  */
-int OSSL_HPKE_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
+int OSSL_HPKE_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
                           OSSL_HPKE_SUITE *suite_in,
                           OSSL_HPKE_SUITE *suite,
                           unsigned char *pub,
@@ -2079,7 +2078,7 @@ int OSSL_HPKE_good4grease(OSSL_LIB_CTX *libctx, const char *propq,
                           unsigned char *cipher,
                           size_t cipher_len)
 {
-    return hpke_good4grease(libctx, propq, suite_in, suite,
+    return hpke_get_grease_value(libctx, propq, suite_in, suite,
                             pub, pub_len, cipher, cipher_len);
 }
 

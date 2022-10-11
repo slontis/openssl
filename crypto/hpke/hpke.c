@@ -690,6 +690,7 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
 err:
     if (erv != 1) { EVP_PKEY_free(skR); }
     EVP_PKEY_CTX_free(pctx);
+    OPENSSL_free(lpub);
     return erv;
 }
 

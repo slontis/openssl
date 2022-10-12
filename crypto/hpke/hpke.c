@@ -403,7 +403,7 @@ static int hpke_aead_dec(OSSL_LIB_CTX *libctx, const char *propq,
 err:
     EVP_CIPHER_CTX_free(ctx);
     EVP_CIPHER_free(enc);
-    OPENSSL_free(plaintext);
+    OPENSSL_clear_free(plaintext, plaintextlen);
     return erv;
 }
 
@@ -1044,7 +1044,9 @@ static int hpke_encap(OSSL_HPKE_CTX *ctx, unsigned char *enc, size_t *enclen,
                                ctx->shared_secret,
                                &ctx->shared_secretlen);
     if (erv != 1) {
+        OPENSSL_clear_free(ctx->shared_secret, ctx->shared_secretlen);
         ctx->shared_secretlen = 0;
+        ctx->shared_secret = NULL;
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
@@ -1138,7 +1140,7 @@ static int hpke_decap(OSSL_HPKE_CTX *ctx,
     }
     EVP_PKEY_CTX_free(pctx);
     pctx = NULL;
-    OPENSSL_free(ctx->shared_secret); /* in case of 2nd call */
+    OPENSSL_clear_free(ctx->shared_secret, ctx->shared_secretlen); /* in case of 2nd call */
     ctx->shared_secret = OPENSSL_malloc(lsslen);
     if (ctx->shared_secret == NULL) {
         erv = 0;
@@ -1364,6 +1366,11 @@ static int hpke_do_rest(OSSL_HPKE_CTX *ctx, int operation,
     }
 
 err:
+    OPENSSL_cleanse(ks_context, OSSL_HPKE_MAXSIZE);
+    OPENSSL_cleanse(psk_hash, OSSL_HPKE_MAXSIZE);
+    OPENSSL_cleanse(secret, OSSL_HPKE_MAXSIZE);
+    OPENSSL_cleanse(nonce, OSSL_HPKE_MAXSIZE);
+    OPENSSL_cleanse(key, OSSL_HPKE_MAXSIZE);
     EVP_KDF_CTX_free(kctx);
     return erv;
 }
@@ -1413,14 +1420,11 @@ void OSSL_HPKE_CTX_free(OSSL_HPKE_CTX *ctx)
     if (ctx == NULL)
         return;
     OPENSSL_free(ctx->propq);
-    if (ctx->exportersec)
-        OPENSSL_cleanse(ctx->exportersec, ctx->exporterseclen);
-    OPENSSL_free(ctx->exportersec);
+    OPENSSL_clear_free(ctx->exportersec, ctx->exporterseclen);
     OPENSSL_free(ctx->pskid);
-    OPENSSL_cleanse(ctx->psk, ctx->psklen);
-    OPENSSL_free(ctx->psk);
-    OPENSSL_free(ctx->shared_secret);
-    OPENSSL_free(ctx->ikme);
+    OPENSSL_clear_free(ctx->psk, ctx->psklen);
+    OPENSSL_clear_free(ctx->shared_secret, ctx->shared_secretlen);
+    OPENSSL_clear_free(ctx->ikme, ctx->ikmelen);
 
     EVP_PKEY_free(ctx->authpriv);
 
@@ -1453,8 +1457,7 @@ int OSSL_HPKE_CTX_set1_psk(OSSL_HPKE_CTX *ctx,
     }
     /* free previous value if any */
     OPENSSL_free(ctx->pskid);
-    OPENSSL_cleanse(ctx->psk, ctx->psklen);
-    OPENSSL_free(ctx->psk);
+    OPENSSL_clear_free(ctx->psk, ctx->psklen);
     ctx->pskid = OPENSSL_strdup(pskid);
     if (ctx->pskid == NULL)
         goto err;
@@ -1467,8 +1470,7 @@ int OSSL_HPKE_CTX_set1_psk(OSSL_HPKE_CTX *ctx,
 err:
     /* zap any new or old psk */
     OPENSSL_free(ctx->pskid);
-    OPENSSL_cleanse(ctx->psk, ctx->psklen);
-    OPENSSL_free(ctx->psk);
+    OPENSSL_clear_free(ctx->psk, ctx->psklen);
     ctx->psklen = 0;
     return 0;
 }
@@ -1488,7 +1490,7 @@ int OSSL_HPKE_CTX_set1_ikme(OSSL_HPKE_CTX *ctx,
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         return 0;
     }
-    OPENSSL_free(ctx->ikme);
+    OPENSSL_clear_free(ctx->ikme, ctx->ikmelen);
     ctx->ikme = OPENSSL_malloc(ikmelen);
     if (ctx->ikme == NULL)
         return 0;

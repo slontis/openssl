@@ -54,12 +54,6 @@ static const char OSSL_HPKE_PSK_HASH_LABEL[] = "\x70\x73\x6b\x5f\x68\x61\x73\x68
 /**<  "secret" - for generating shared secret */
 static const char OSSL_HPKE_SECRET_LABEL[] = "\x73\x65\x63\x72\x65\x74";
 
-/*
- * PEM header/footer for private keys
- * PEM_STRING_PKCS8INF is just: "PRIVATE KEY"
- */
-#define PEM_PRIVATEHEADER "-----BEGIN "PEM_STRING_PKCS8INF"-----\n"
-#define PEM_PRIVATEFOOTER "\n-----END "PEM_STRING_PKCS8INF"-----\n"
 
 /* max string len we'll try map to a suite */
 #define OSSL_HPKE_MAX_SUITESTR 38

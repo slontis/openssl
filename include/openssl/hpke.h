@@ -27,7 +27,10 @@
 # define OSSL_HPKE_MODE_PSKAUTH           3 /**< PSK+authenticated mode */
 
 /*
- * The (16bit) HPKE algorithn IDs
+ * The (16bit) HPKE algorithn ID IANA codepoints
+ *
+ * If/when new IANA codepoints are added there are tables in
+ * the library implementation that must also be updated.
  */
 # define OSSL_HPKE_KEM_ID_RESERVED         0x0000 /**< not used */
 # define OSSL_HPKE_KEM_ID_P256             0x0010 /**< NIST P-256 */
@@ -87,10 +90,6 @@ typedef struct {
         OSSL_HPKE_AEAD_ID_AES_GCM_128 \
     }
 
-# ifndef OSSL_HPKE_MAXSIZE
-#  define OSSL_HPKE_MAXSIZE 512
-# endif
-
 /**
  * @brief opaque type for HPKE contexts
  */
@@ -124,7 +123,6 @@ void OSSL_HPKE_CTX_free(OSSL_HPKE_CTX *ctx);
 int OSSL_HPKE_CTX_set1_psk(OSSL_HPKE_CTX *ctx,
                            const char *pskid,
                            const unsigned char *psk, size_t psklen);
-
 
 /**
  * @brief set a sender IKM for key DHKEM generation
@@ -253,7 +251,6 @@ int OSSL_HPKE_recipient_open(OSSL_HPKE_CTX *ctx,
                              const unsigned char *aad, size_t aadlen,
                              const unsigned char *ct, size_t ctlen);
 
-
 /**
  * @brief sender export-only encapsulation function
  * @param ctx is the pointer for the HPKE context
@@ -379,7 +376,6 @@ int OSSL_HPKE_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
  * example.
  */
 int OSSL_HPKE_str2suite(const char *str, OSSL_HPKE_SUITE *suite);
-
 
 /**
  * @brief tell the caller how big the cipertext will be

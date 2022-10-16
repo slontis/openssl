@@ -223,6 +223,8 @@ struct ossl_hpke_ctx_st
     char *pskid; /**< PSK stuff */
     unsigned char *psk;
     size_t psklen;
+    unsigned char *info;
+    size_t infolen;
     unsigned char *ikme;
     size_t ikmelen;
     EVP_PKEY *authpriv; /**< sender's authentication private key */
@@ -283,6 +285,7 @@ static uint16_t kdf_iana2index(uint16_t codepoint)
     }
     return 0;
 }
+
 /*
  * @brief check if KEM uses NIST curve or not
  * @param kem_id is the externally supplied kem_id
@@ -608,6 +611,24 @@ err:
     return erv;
 }
 
+/*
+ * @brief check mode is in-range and supported
+ * @param mode is the caller's chosen mode
+ * @return 1 for good (OpenSSL style), not 1 for error
+ */
+static int hpke_mode_check(unsigned int mode)
+{
+    switch (mode) {
+    case OSSL_HPKE_MODE_BASE:
+    case OSSL_HPKE_MODE_PSK:
+    case OSSL_HPKE_MODE_AUTH:
+    case OSSL_HPKE_MODE_PSKAUTH:
+        break;
+    default:
+        return 0;
+    }
+    return 1;
+}
 /**
  * @brief check if a suite is supported locally
  *
@@ -696,6 +717,7 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
+
     if (hpke_kem_id_nist_curve(suite.kem_id) == 1) {
         *p++ = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
                                                 (char *)hpke_kem_tab[kem_ind]
@@ -1268,7 +1290,7 @@ static int hpke_do_rest(OSSL_HPKE_CTX *ctx, int operation,
         goto err;
     }
     /*
-     * if we're doing a read encrypt or decrypt we need nonce
+     * if we're doing a real encrypt or decrypt we need nonce
      * and secret, but not if we're only exporting
      */
     if (operation != OSSL_HPKE_OP_EXPONLY) {
@@ -1362,6 +1384,7 @@ err:
     EVP_KDF_CTX_free(kctx);
     return erv;
 }
+
 /* externally visible functions from below here */
 
 /**
@@ -1377,6 +1400,8 @@ OSSL_HPKE_CTX *OSSL_HPKE_CTX_new(int mode, OSSL_HPKE_SUITE suite,
 {
     OSSL_HPKE_CTX *ctx = NULL;
 
+    if (hpke_mode_check(mode) != 1)
+        return NULL;
     if (hpke_suite_check(suite) != 1)
         return NULL;
     if (mode < 0 || mode > OSSL_HPKE_MODE_PSKAUTH)
@@ -1413,9 +1438,8 @@ void OSSL_HPKE_CTX_free(OSSL_HPKE_CTX *ctx)
     OPENSSL_clear_free(ctx->psk, ctx->psklen);
     OPENSSL_clear_free(ctx->shared_secret, ctx->shared_secretlen);
     OPENSSL_clear_free(ctx->ikme, ctx->ikmelen);
-
     EVP_PKEY_free(ctx->authpriv);
-
+    OPENSSL_free(ctx->info);
     OPENSSL_free(ctx->authpub);
 
     OPENSSL_free(ctx);
@@ -1622,7 +1646,6 @@ int OSSL_HPKE_sender_seal(OSSL_HPKE_CTX *ctx,
     } else {
         ctx->seq++;
     }
-
     return erv;
 }
 
@@ -1779,11 +1802,9 @@ int OSSL_HPKE_recipient_export_decap(OSSL_HPKE_CTX *ctx,
  * or decryption for this to work (as this is based on the negotiated
  * "exporter_secret" estabilshed via the HPKE operation.
  */
-int OSSL_HPKE_CTX_export(OSSL_HPKE_CTX *ctx,
-                         unsigned char *secret,
-                         size_t secretlen,
-                         const unsigned char *label,
-                         size_t labellen)
+int OSSL_HPKE_export(OSSL_HPKE_CTX *ctx,
+                     unsigned char *secret, size_t secretlen,
+                     const unsigned char *label, size_t labellen)
 {
     int erv = 1;
     EVP_KDF_CTX *kctx = NULL;
@@ -1832,6 +1853,191 @@ int OSSL_HPKE_CTX_export(OSSL_HPKE_CTX *ctx,
     }
     return 1;
 }
+
+/*
+ * Some even newer APIs below that separate out encap/decap from
+ * seal/open/export
+ */
+
+/**
+ * @brief sender encapsulation function
+ * @param ctx is the pointer for the HPKE context
+ * @param enc is the sender's ephemeral public value
+ * @param enclen is the size the above
+ * @param pub is the recipient public key octets
+ * @param publen is the size the above
+ * @param info is the info parameter
+ * @param infolen is the size the above
+ * @return 1 for success, 0 for error
+ */
+int OSSL_HPKE_encap(OSSL_HPKE_CTX *ctx,
+                    unsigned char *enc, size_t *enclen,
+                    unsigned char *pub, size_t publen,
+                    const unsigned char *info, size_t infolen)
+{
+    if (ctx == NULL || enc == NULL || enclen == NULL || *enclen == 0
+        || pub == NULL || publen == 0) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    }
+    if (ctx->shared_secret != NULL || ctx->info != NULL) {
+        /* only allow one encap per OSSL_HPKE_CTX */
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+        return 0;
+    }
+    if (hpke_encap(ctx, enc, enclen, pub, publen) != 1) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        return 0;
+    }
+    if (info != NULL) {
+        if (infolen == 0) {
+            ERR_raise(ERR_LIB_CRYPTO, ERR_R_PASSED_INVALID_ARGUMENT);
+            return 0;
+        }
+        ctx->info = OPENSSL_malloc(infolen);
+        if (ctx->info == NULL) {
+            ERR_raise(ERR_LIB_CRYPTO, ERR_R_MALLOC_FAILURE);
+            return 0;
+        }
+        memcpy(ctx->info, info, infolen);
+        ctx->infolen = infolen;
+    }
+    return 1;
+}
+
+/**
+ * @brief recipient decapsulation function
+ * @param ctx is the pointer for the HPKE context
+ * @param enc is the sender's ephemeral public value
+ * @param enclen is the size the above
+ * @param recippriv is the EVP_PKEY form of recipient private value
+ * @param info is the info parameter
+ * @param infolen is the size the above
+ * @return 1 for success, 0 for error
+ *
+ * Following this, OSSL_HPKE_CTX_export can be called.
+ */
+int OSSL_HPKE_decap(OSSL_HPKE_CTX *ctx,
+                    const unsigned char *enc, size_t enclen,
+                    EVP_PKEY *recippriv,
+                    const unsigned char *info, size_t infolen)
+{
+    int erv = 1;
+
+    if (ctx == NULL || enc == NULL || enclen == 0 || recippriv == NULL) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_PASSED_NULL_PARAMETER);
+        return 0;
+    }
+    if (ctx->shared_secret != NULL) {
+        /* only allow one encap per OSSL_HPKE_CTX */
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+        return 0;
+    }
+    erv = hpke_decap(ctx, enc, enclen, recippriv);
+    if (erv != 1) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        return 0;
+    }
+    if (info != NULL) {
+        if (infolen == 0) {
+            ERR_raise(ERR_LIB_CRYPTO, ERR_R_PASSED_INVALID_ARGUMENT);
+            return 0;
+        }
+        ctx->info = OPENSSL_malloc(infolen);
+        if (ctx->info == NULL) {
+            ERR_raise(ERR_LIB_CRYPTO, ERR_R_MALLOC_FAILURE);
+            return 0;
+        }
+        memcpy(ctx->info, info, infolen);
+        ctx->infolen = infolen;
+    }
+    return 1;
+}
+
+/**
+ * @brief new sender seal function
+ * @param ctx is the pointer for the HPKE context
+ * @param ct is the ciphertext output
+ * @param ctlen is the size the above
+ * @param aad is the aad parameter
+ * @param aadlen is the size the above
+ * @param pt is the plaintext
+ * @param ptlen is the size the above
+ * @return 1 for success, 0 for error
+ *
+ * This can be called multiple times
+ */
+int OSSL_HPKE_seal(OSSL_HPKE_CTX *ctx,
+                   unsigned char *ct, size_t *ctlen,
+                   const unsigned char *aad, size_t aadlen,
+                   const unsigned char *pt, size_t ptlen)
+{
+    int erv = 1;
+
+    if (ctx == NULL || ct == NULL || ctlen == NULL || *ctlen == 0
+        || pt == NULL || ptlen == 0) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_PASSED_INVALID_ARGUMENT);
+        return 0;
+    }
+    if (ctx->shared_secret == NULL) {
+        /* need to have done an encap first, info can be NULL */
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+        return 0;
+    }
+    erv = hpke_do_rest(ctx, OSSL_HPKE_OP_ENC, ct, ctlen,
+                       (unsigned char *)pt, &ptlen,
+                       ctx->info, ctx->infolen, aad, aadlen);
+    if (erv != 1) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        return 0;
+    } else {
+        ctx->seq++;
+    }
+    return 1;
+}
+
+/**
+ * @brief new sender seal function
+ * @param ctx is the pointer for the HPKE context
+ * @param ct is the ciphertext output
+ * @param ctlen is the size the above
+ * @param aad is the aad parameter
+ * @param aadlen is the size the above
+ * @param pt is the plaintext
+ * @param ptlen is the size the above
+ * @return 1 for success, 0 for error
+ *
+ * This can be called multiple times
+ */
+int OSSL_HPKE_open(OSSL_HPKE_CTX *ctx,
+                   unsigned char *pt, size_t *ptlen,
+                   const unsigned char *aad, size_t aadlen,
+                   const unsigned char *ct, size_t ctlen)
+{
+    int erv = 1;
+
+    if (ctx == NULL || pt == NULL || ptlen == NULL || *ptlen == 0
+        || ct == NULL || ctlen == 0) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_PASSED_INVALID_ARGUMENT);
+        return 0;
+    }
+    if (ctx->shared_secret == NULL) {
+        /* need to have done an encap first, info can be NULL */
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
+        return 0;
+    }
+    erv = hpke_do_rest(ctx, OSSL_HPKE_OP_DEC, (unsigned char *)ct, &ctlen,
+                       pt, ptlen,
+                       ctx->info, ctx->infolen, aad, aadlen);
+    if (erv != 1) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        return 0;
+    } else {
+        ctx->seq++;
+    }
+    return 1;
+}
+
 
 /*
  * @brief generate a key pair but keep private inside API

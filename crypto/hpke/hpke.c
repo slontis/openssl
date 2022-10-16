@@ -2038,7 +2038,6 @@ int OSSL_HPKE_open(OSSL_HPKE_CTX *ctx,
     return 1;
 }
 
-
 /*
  * @brief generate a key pair but keep private inside API
  * @param libctx is the context to use

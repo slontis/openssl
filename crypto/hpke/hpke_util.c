@@ -12,11 +12,72 @@
 #include <openssl/params.h>
 #include <openssl/err.h>
 #include <openssl/proverr.h>
+#include <openssl/hpke.h>
+#include <openssl/sha.h>
+#include <openssl/rand.h>
+#include "crypto/ecx.h"
 #include "internal/hpke_util.h"
 #include "internal/packet.h"
 
 /* ASCII: "HPKE-v1", in hex for EBCDIC compatibility */
 static const char LABEL_HPKEV1[] = "\x48\x50\x4B\x45\x2D\x76\x31";
+
+/*
+ * @brief table of KEMs
+ * See Section 7.1 "Table 2 KEM IDs"
+ */
+static const OSSL_HPKE_KEM_INFO hpke_kem_tab[] = {
+    { OSSL_HPKE_KEM_ID_P256, "EC", OSSL_HPKE_KEMSTR_P256,
+      LN_sha256, SHA256_DIGEST_LENGTH, 65, 65, 32, 0xFF },
+    { OSSL_HPKE_KEM_ID_P384, "EC", OSSL_HPKE_KEMSTR_P384,
+      LN_sha384, SHA384_DIGEST_LENGTH, 97, 97, 48, 0xFF },
+    { OSSL_HPKE_KEM_ID_P521, "EC", OSSL_HPKE_KEMSTR_P521,
+      LN_sha512, SHA512_DIGEST_LENGTH, 133, 133, 66, 0x01 },
+    { OSSL_HPKE_KEM_ID_X25519, OSSL_HPKE_KEMSTR_X25519, NULL,
+      LN_sha256, SHA256_DIGEST_LENGTH,
+      X25519_KEYLEN, X25519_KEYLEN, X25519_KEYLEN },
+    { OSSL_HPKE_KEM_ID_X448, OSSL_HPKE_KEMSTR_X448, NULL,
+      LN_sha512, SHA512_DIGEST_LENGTH, X448_KEYLEN, X448_KEYLEN, X448_KEYLEN }
+};
+
+/* Return an object containing KEM constants associated with a EC curve name */
+const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_curve(const char *curve)
+{
+    int i;
+
+    for (i = 0; hpke_kem_tab[i].keytype != NULL; ++i) {
+        const char *group = hpke_kem_tab[i].groupname;
+
+        if (group == NULL)
+            group = hpke_kem_tab[i].keytype;
+        if (OPENSSL_strcasecmp(curve, group) == 0)
+            return &hpke_kem_tab[i];
+    }
+    ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
+    return NULL;
+}
+
+const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_id(uint16_t kemid)
+{
+    int i;
+
+    for (i = 0; hpke_kem_tab[i].keytype != NULL; ++i) {
+        if (hpke_kem_tab[i].kem_id == kemid)
+            return &hpke_kem_tab[i];
+    }
+    ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
+    return NULL;
+}
+
+const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_random(OSSL_LIB_CTX *libctx)
+{
+    unsigned char rval = 0;
+    int sz = OSSL_NELEM(hpke_kem_tab);
+
+    if (RAND_bytes_ex(libctx, &rval, sizeof(rval), 0) <= 0)
+        return NULL;
+    return &hpke_kem_tab[rval % sz];
+}
 
 static int kdf_derive(EVP_KDF_CTX *kctx,
                       unsigned char *out, size_t outlen, int mode,

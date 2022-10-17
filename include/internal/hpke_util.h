@@ -18,6 +18,27 @@
 # define OSSL_HPKE_MAX_NONCE 12
 # define OSSL_HPKE_MAX_KDF_INPUTLEN 64
 
+/*
+ * @brief info about a KEM
+ * Used to store constants from Section 7.1 "Table 2 KEM IDs"
+ * and the bitmask for EC curves described in Section 7.1.3 DeriveKeyPair
+ */
+typedef struct {
+    uint16_t       kem_id; /**< code point for key encipherment method */
+    const char    *keytype; /**< string form of algtype "EC"/"X25519"/"X448" */
+    const char    *groupname; /**< string form of EC group for NIST curves  */
+    const char    *mdname; /**< hash alg name for the HKDF */
+    size_t         Nsecret; /**< size of secrets */
+    size_t         Nenc; /**< length of encapsulated key */
+    size_t         Npk; /**< length of public key */
+    size_t         Npriv; /**< length of raw private key */
+    uint8_t        bitmask;
+} OSSL_HPKE_KEM_INFO;
+
+const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_curve(const char *curve);
+const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_id(uint16_t kemid);
+const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_random(OSSL_LIB_CTX *libctx);
+
 int ossl_hpke_kdf_extract(EVP_KDF_CTX *kctx,
                           unsigned char *prk, size_t prklen,
                           const unsigned char *salt, size_t saltlen,

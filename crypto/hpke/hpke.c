@@ -12,22 +12,16 @@
  * An OpenSSL-based HPKE implementation of RFC9180
  */
 
-#include <stddef.h>
-#include <stdint.h>
 #include <string.h>
-
-#include <openssl/ssl.h>
 #include <openssl/rand.h>
 #include <openssl/kdf.h>
-#include <openssl/evp.h>
-#include <openssl/params.h>
-#include <openssl/param_build.h>
 #include <openssl/core_names.h>
-#include <internal/packet.h>
-#include <internal/common.h>
 #include <openssl/hpke.h>
-#include <internal/hpke_util.h>
+#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <openssl/err.h>
+#include "internal/hpke_util.h"
+#include "internal/nelem.h"
 
 /** default buffer size for keys and internal buffers we use */
 #ifndef OSSL_HPKE_MAXSIZE
@@ -97,38 +91,6 @@ static hpke_aead_info_t hpke_aead_tab[] = {
 # endif
     { OSSL_HPKE_AEAD_ID_EXPORTONLY, NULL, 0, 0, 0 }
 #endif
-};
-
-/*
- * @brief info about a KEM
- */
-typedef struct {
-    uint16_t       kem_id; /**< code point for key encipherment method */
-    const char     *keytype; /**< string form of algtype "EC"/"X25519"/"X448" */
-    const char     *groupname; /**< string form of EC group for NIST curves  */
-    int            groupid; /**< NID of KEM */
-    const char     *mdname; /**< hash alg name for the HKDF */
-    size_t         Nsecret; /**< size of secrets */
-    size_t         Nenc; /**< length of encapsulated key */
-    size_t         Npk; /**< length of public key */
-    size_t         Npriv; /**< length of raw private key */
-} hpke_kem_info_t;
-
-/*
- * @brief table of KEMs
- */
-static hpke_kem_info_t hpke_kem_tab[] = {
-    { 0, NULL, NULL, 0, NULL, 0, 0, 0 }, /* treat 0 as error so nowt here */
-    { OSSL_HPKE_KEM_ID_P256, "EC", OSSL_HPKE_KEMSTR_P256, NID_X9_62_prime256v1,
-      LN_sha256, 32, 65, 65, 32 },
-    { OSSL_HPKE_KEM_ID_P384, "EC", OSSL_HPKE_KEMSTR_P384, NID_secp384r1,
-      LN_sha384, 48, 97, 97, 48 },
-    { OSSL_HPKE_KEM_ID_P521, "EC", OSSL_HPKE_KEMSTR_P521, NID_secp521r1,
-      LN_sha512, 64, 133, 133, 66 },
-    { OSSL_HPKE_KEM_ID_X25519, OSSL_HPKE_KEMSTR_X25519, NULL, NID_X25519,
-      LN_sha256, 32, 32, 32, 32 },
-    { OSSL_HPKE_KEM_ID_X448, OSSL_HPKE_KEMSTR_X448, NULL, NID_X448,
-      LN_sha512, 64, 56, 56, 56 }
 };
 
 /*
@@ -251,24 +213,6 @@ static uint16_t aead_iana2index(uint16_t codepoint)
 }
 
 /*
- * @brief map from IANA codepoint to KEM table index
- *
- * @param codepoint should be an IANA code point
- * @return index in KEM table or 0 if error
- */
-static uint16_t kem_iana2index(uint16_t codepoint)
-{
-    uint16_t nkems = OSSL_NELEM(hpke_kem_tab);
-    uint16_t i = 0;
-
-    for (i = 0; i != nkems; i++) {
-        if (hpke_kem_tab[i].kem_id == codepoint)
-            return i;
-    }
-    return 0;
-}
-
-/*
  * @brief map from IANA codepoint to KDF table index
  *
  * @param codepoint should be an IANA code point
@@ -293,15 +237,10 @@ static uint16_t kdf_iana2index(uint16_t codepoint)
  */
 static int hpke_kem_id_nist_curve(uint16_t kem_id)
 {
-    switch (kem_id) {
-    case OSSL_HPKE_KEM_ID_P256:
-    case OSSL_HPKE_KEM_ID_P384:
-    case OSSL_HPKE_KEM_ID_P521:
-        return 1;
-    default:
-        return 0;
-    }
-    return 0;
+    const OSSL_HPKE_KEM_INFO *kem_info;
+
+    kem_info = ossl_HPKE_KEM_INFO_find_id(kem_id);
+    return kem_info != NULL && kem_info->groupname != NULL;
 }
 
 /*
@@ -309,26 +248,28 @@ static int hpke_kem_id_nist_curve(uint16_t kem_id)
  *
  * @param libctx is the context to use
  * @param propq is a properties string
- * @param curve is the curve NID
  * @param gname is the curve groupname
  * @param buf is the binary buffer with the (uncompressed) public value
  * @param buflen is the length of the private key buffer
  * @return a working EVP_PKEY * or NULL
  */
-static EVP_PKEY * EVP_PKEY_new_raw_nist_public_key(OSSL_LIB_CTX *libctx,
-                                                   const char *propq,
-                                                   int curve,
-                                                   const char *gname,
-                                                   const unsigned char *buf,
-                                                   size_t buflen)
+static EVP_PKEY *EVP_PKEY_new_raw_nist_public_key(OSSL_LIB_CTX *libctx,
+                                                  const char *propq,
+                                                  const char *gname,
+                                                  const unsigned char *buf,
+                                                  size_t buflen)
 {
     int erv = 0;
+    OSSL_PARAM params[2];
     EVP_PKEY *ret = NULL;
     EVP_PKEY_CTX *cctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", propq);
 
+    params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
+                                                 (char *)gname, 0);
+    params[1] = OSSL_PARAM_construct_end();
     if (cctx == NULL
         || EVP_PKEY_paramgen_init(cctx) <= 0
-        || EVP_PKEY_CTX_set_ec_paramgen_curve_nid(cctx, curve) <= 0
+        || EVP_PKEY_CTX_set_params(cctx, params) <= 0
         || EVP_PKEY_paramgen(cctx, &ret) <= 0
         || EVP_PKEY_set1_encoded_public_key(ret, buf, buflen) != 1) {
         goto err;
@@ -642,21 +583,15 @@ static int hpke_suite_check(OSSL_HPKE_SUITE suite)
      * implemented here, loops below start at one
      * as zero'th element of tables is "null"
      */
-    int kem_ok = 0;
     int kdf_ok = 0;
     int aead_ok = 0;
     int ind = 0;
-    int nkems = OSSL_NELEM(hpke_kem_tab);
     int nkdfs = OSSL_NELEM(hpke_kdf_tab);
     int naeads = OSSL_NELEM(hpke_aead_tab);
 
     /* check KEM */
-    for (ind = 1; ind != nkems; ind++) {
-        if (suite.kem_id == hpke_kem_tab[ind].kem_id) {
-            kem_ok = 1;
-            break;
-        }
-    }
+    if (ossl_HPKE_KEM_INFO_find_id(suite.kem_id) == NULL)
+        return 0;
 
     /* check kdf */
     for (ind = 1; ind != nkdfs; ind++) {
@@ -674,7 +609,7 @@ static int hpke_suite_check(OSSL_HPKE_SUITE suite)
         }
     }
 
-    if (kem_ok == 1 && kdf_ok == 1 && aead_ok == 1)
+    if (kdf_ok == 1 && aead_ok == 1)
         return 1;
     return 0;
 }
@@ -700,7 +635,7 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
     int erv = 1; /* Our error return value - 1 is success */
     EVP_PKEY_CTX *pctx = NULL;
     EVP_PKEY *skR = NULL;
-    uint16_t kem_ind = 0;
+    const OSSL_HPKE_KEM_INFO *kem_info;
     OSSL_PARAM params[3], *p = params;
 
     if (hpke_suite_check(suite) != 1)
@@ -711,8 +646,8 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
         return 0;
     if (ikmlen == 0 && ikm != NULL)
         return 0;
-    kem_ind = kem_iana2index(suite.kem_id);
-    if (kem_ind == 0) {
+    kem_info = ossl_HPKE_KEM_INFO_find_id(suite.kem_id);
+    if (kem_info == NULL) {
         erv = 0;
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
@@ -720,12 +655,10 @@ static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
 
     if (hpke_kem_id_nist_curve(suite.kem_id) == 1) {
         *p++ = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
-                                                (char *)hpke_kem_tab[kem_ind]
-                                                .groupname, 0);
+                                                (char *)kem_info->groupname, 0);
         pctx = EVP_PKEY_CTX_new_from_name(libctx, "EC", propq);
     } else {
-        pctx = EVP_PKEY_CTX_new_from_name(libctx, hpke_kem_tab[kem_ind].keytype,
-                                          propq);
+        pctx = EVP_PKEY_CTX_new_from_name(libctx, kem_info->keytype, propq);
     }
     if (pctx == NULL
         || EVP_PKEY_keygen_init(pctx) <= 0) {
@@ -781,12 +714,13 @@ static int hpke_random_suite(OSSL_LIB_CTX *libctx,
     unsigned char rval = 0;
     int nkdfs = OSSL_NELEM(hpke_kdf_tab)-1;
     int naeads = OSSL_NELEM(hpke_aead_tab)-1;
-    int nkems = OSSL_NELEM(hpke_kem_tab)-1;
+    const OSSL_HPKE_KEM_INFO *kem_info;
 
     /* random kem */
-    if (RAND_bytes_ex(libctx, &rval, sizeof(rval), OSSL_HPKE_RSTRENGTH) <= 0)
+    kem_info = ossl_HPKE_KEM_INFO_find_random(libctx);
+    if (kem_info == NULL)
         return 0;
-    suite->kem_id = hpke_kem_tab[(rval % nkems + 1)].kem_id;
+    suite->kem_id = kem_info->kem_id;
 
     /* random kdf */
     if (RAND_bytes_ex(libctx, &rval, sizeof(rval), OSSL_HPKE_RSTRENGTH) <= 0)
@@ -825,7 +759,7 @@ static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
     int crv = 0;
     int erv = 0;
     size_t plen = 0;
-    uint16_t kem_ind = 0;
+    const OSSL_HPKE_KEM_INFO *kem_info;
 
     if (pub == NULL || !pub_len
         || ciphertext == NULL || !ciphertext_len || suite == NULL)
@@ -838,8 +772,9 @@ static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
     } else {
         chosen = *suite_in;
     }
-    kem_ind = kem_iana2index(chosen.kem_id);
-    if (kem_ind == 0) {
+
+    kem_info = ossl_HPKE_KEM_INFO_find_id(chosen.kem_id);
+    if (kem_info == NULL) {
         erv = 0;
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
@@ -848,7 +783,7 @@ static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
         return 0;
     *suite = chosen;
     /* publen */
-    plen = hpke_kem_tab[kem_ind].Npk;
+    plen = kem_info->Npk;
     if (plen > *pub_len)
         return 0;
     if (RAND_bytes_ex(libctx, pub, plen, OSSL_HPKE_RSTRENGTH) <= 0)
@@ -952,7 +887,7 @@ static int hpke_expansion(OSSL_HPKE_SUITE suite,
                           size_t *cipherlen)
 {
     uint16_t aead_ind = 0;
-    uint16_t kem_ind = 0;
+    const OSSL_HPKE_KEM_INFO *kem_info;
 
     if (cipherlen == NULL || enclen == NULL) {
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
@@ -968,12 +903,12 @@ static int hpke_expansion(OSSL_HPKE_SUITE suite,
         return 0;
     }
     *cipherlen = clearlen + hpke_aead_tab[aead_ind].taglen;
-    kem_ind = kem_iana2index(suite.kem_id);
-    if (kem_ind == 0) {
+    kem_info = ossl_HPKE_KEM_INFO_find_id(suite.kem_id);
+    if (kem_info == NULL) {
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         return 0;
     }
-    *enclen = hpke_kem_tab[kem_ind].Nenc;
+    *enclen = kem_info->Nenc;
     return 1;
 }
 
@@ -998,27 +933,26 @@ static int hpke_encap(OSSL_HPKE_CTX *ctx, unsigned char *enc, size_t *enclen,
     size_t lsslen = 0;
     EVP_PKEY_CTX *pctx = NULL;
     EVP_PKEY *pkR = NULL;
-    int kem_ind = 0;
+    const OSSL_HPKE_KEM_INFO *kem_info;
 
     if (ctx == NULL || enc == NULL || enclen == NULL || *enclen == 0
         || pub == NULL || publen == 0) {
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         return 0;
     }
-    kem_ind = kem_iana2index(ctx->suite.kem_id);
-    if (kem_ind == 0) {
+    kem_info = ossl_HPKE_KEM_INFO_find_id(ctx->suite.kem_id);
+    if (kem_info == NULL) {
         erv = 0;
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
     if (hpke_kem_id_nist_curve(ctx->suite.kem_id) == 1) {
         pkR = EVP_PKEY_new_raw_nist_public_key(ctx->libctx, ctx->propq,
-                                               hpke_kem_tab[kem_ind].groupid,
-                                               hpke_kem_tab[kem_ind].groupname,
+                                               kem_info->groupname,
                                                pub, publen);
     } else {
         pkR = EVP_PKEY_new_raw_public_key_ex(ctx->libctx,
-                                             hpke_kem_tab[kem_ind].keytype,
+                                             kem_info->keytype,
                                              ctx->propq, pub, publen);
     }
     if (pkR == NULL) {
@@ -1110,25 +1044,22 @@ static int hpke_decap(OSSL_HPKE_CTX *ctx,
     *p = OSSL_PARAM_construct_end();
     if (ctx->mode == OSSL_HPKE_MODE_AUTH
         || ctx->mode == OSSL_HPKE_MODE_PSKAUTH) {
-        int kem_ind = 0;
+        const OSSL_HPKE_KEM_INFO *kem_info;
 
-        kem_ind = kem_iana2index(ctx->suite.kem_id);
-        if (kem_ind == 0) {
+        kem_info = ossl_HPKE_KEM_INFO_find_id(ctx->suite.kem_id);
+        if (kem_info == NULL) {
             erv = 0;
             ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
             goto err;
         }
         if (hpke_kem_id_nist_curve(ctx->suite.kem_id) == 1) {
             spub = EVP_PKEY_new_raw_nist_public_key(ctx->libctx, ctx->propq,
-                                                    hpke_kem_tab[kem_ind].
-                                                    groupid,
-                                                    hpke_kem_tab[kem_ind].
-                                                    groupname,
+                                                    kem_info->groupname,
                                                     ctx->authpub,
                                                     ctx->authpublen);
         } else {
             spub = EVP_PKEY_new_raw_public_key_ex(ctx->libctx,
-                                                  hpke_kem_tab[kem_ind].keytype,
+                                                  kem_info->keytype,
                                                   ctx->propq,
                                                   ctx->authpub,
                                                   ctx->authpublen);
@@ -1198,7 +1129,7 @@ static int hpke_do_rest(OSSL_HPKE_CTX *ctx, int operation,
     size_t pskidlen = 0;
     size_t psk_hashlen = OSSL_HPKE_MAXSIZE;
     unsigned char psk_hash[OSSL_HPKE_MAXSIZE];
-    int kem_ind = 0, kdf_ind = 0, aead_ind = 0;
+    int kdf_ind = 0, aead_ind = 0;
     size_t secretlen = OSSL_HPKE_MAXSIZE;
     unsigned char secret[OSSL_HPKE_MAXSIZE];
     size_t noncelen = OSSL_HPKE_MAXSIZE;
@@ -1211,7 +1142,7 @@ static int hpke_do_rest(OSSL_HPKE_CTX *ctx, int operation,
     unsigned char suitebuf[6];
     const char *mdname = NULL;
 
-    if ((kem_ind = kem_iana2index(ctx->suite.kem_id)) == 0) {
+    if (ossl_HPKE_KEM_INFO_find_id(ctx->suite.kem_id) == NULL) {
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         return 0;
     }
@@ -2168,11 +2099,10 @@ size_t OSSL_HPKE_get_public_encap_size(OSSL_HPKE_SUITE suite)
  */
 size_t OSSL_HPKE_recommend_ikmelen(OSSL_HPKE_SUITE suite)
 {
-    int kem_ind;
+    const OSSL_HPKE_KEM_INFO *kem_info;
 
     if (hpke_suite_check(suite) != 1)
         return 0;
-    if ((kem_ind = kem_iana2index(suite.kem_id)) == 0)
-        return 0;
-    return hpke_kem_tab[kem_ind].Npriv;
+    kem_info = ossl_HPKE_KEM_INFO_find_id(suite.kem_id);
+    return kem_info->Npriv;
 }

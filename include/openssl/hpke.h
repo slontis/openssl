@@ -16,8 +16,8 @@
 # define OSSL_HPKE_H
 # pragma once
 
-# include <openssl/ssl.h>
-
+# include <openssl/obj_mac.h>
+# include <openssl/types.h>
 /*
  * The HPKE modes
  */

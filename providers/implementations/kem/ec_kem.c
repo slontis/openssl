@@ -35,20 +35,6 @@
 #include "prov/ecx.h"
 #include "eckem.h"
 
-/*
- * Used to store constants from Section 7.1 "Table 2 KEM IDs"
- * and the bitmask for curves described in Section 7.1.3 DeriveKeyPair
- */
-typedef struct {
-    const char *curve;
-    const char *kdfdigestname;
-    uint16_t kemid;
-    size_t secretlen;       /* Nsecret = Nh */
-    size_t encodedpublen;
-    size_t encodedprivlen;
-    uint8_t bitmask;
-} DHKEM_ALG;
-
 typedef struct {
     EC_KEY *recipient_key;
     EC_KEY *sender_authkey;
@@ -59,7 +45,7 @@ typedef struct {
     unsigned char *ikm;
     size_t ikmlen;
     const char *kdfname;
-    const DHKEM_ALG *alg;
+    const OSSL_HPKE_KEM_INFO *info;
 } PROV_EC_CTX;
 
 static OSSL_FUNC_kem_newctx_fn eckem_newctx;
@@ -73,29 +59,8 @@ static OSSL_FUNC_kem_freectx_fn eckem_freectx;
 static OSSL_FUNC_kem_set_ctx_params_fn eckem_set_ctx_params;
 static OSSL_FUNC_kem_settable_ctx_params_fn eckem_settable_ctx_params;
 
-/* See Section 7.1 "Table 2 KEM IDs" */
-static const DHKEM_ALG dhkem_alg[] = {
-    { "P-256", "SHA256", 0x0010, 32, 65,  32, 0xFF },
-    { "P-384", "SHA384", 0x0011, 48, 97,  48, 0xFF },
-    { "P-521", "SHA512", 0x0012, 64, 133, 66, 0x01 },
-    { NULL }
-};
-
 /* ASCII: "KEM", in hex for EBCDIC compatibility */
 static const char LABEL_KEM[] = "\x4b\x45\x4d";
-
-/* Return an object containing KEM constants associated with a EC curve name */
-static const DHKEM_ALG *dhkem_ec_find_alg(const char *curve)
-{
-    int i;
-
-    for (i = 0; dhkem_alg[i].curve != NULL; ++i) {
-        if (OPENSSL_strcasecmp(curve, dhkem_alg[i].curve) == 0)
-            return &dhkem_alg[i];
-    }
-    ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_CURVE);
-    return NULL;
-}
 
 static int eckey_check(const EC_KEY *ec, int requires_privatekey)
 {
@@ -154,8 +119,8 @@ static int recipient_key_set(PROV_EC_CTX *ctx, EC_KEY *ec)
 
         if (curve == NULL)
             return -2;
-        ctx->alg = dhkem_ec_find_alg(curve);
-        if (ctx->alg == NULL)
+        ctx->info = ossl_HPKE_KEM_INFO_find_curve(curve);
+        if (ctx->info == NULL)
             return -2;
         if (!EC_KEY_up_ref(ec))
             return 0;
@@ -422,48 +387,48 @@ int ossl_ec_dhkem_derive_private(EC_KEY *ec, BIGNUM *priv,
     unsigned char privbuf[OSSL_HPKE_MAX_PRIVATE];
     const BIGNUM *order;
     unsigned char counter = 0;
-    const DHKEM_ALG *alg;
     const char *curve = ec_curvename_get0(ec);
+    const OSSL_HPKE_KEM_INFO *info;
 
     if (curve == NULL)
         return -2;
 
-    alg = dhkem_ec_find_alg(curve);
-    if (alg == NULL)
+    info = ossl_HPKE_KEM_INFO_find_curve(curve);
+    if (info == NULL)
         return -2;
 
-    kdfctx = ossl_kdf_ctx_create("HKDF", alg->kdfdigestname,
+    kdfctx = ossl_kdf_ctx_create("HKDF", info->mdname,
                                  ossl_ec_key_get_libctx(ec),
                                  ossl_ec_key_get0_propq(ec));
     if (kdfctx == NULL)
         return 0;
 
     /* ikmlen should have a length of at least Nsk */
-    if (ikmlen < alg->encodedprivlen) {
+    if (ikmlen < info->Nsecret) {
         ERR_raise_data(ERR_LIB_PROV, PROV_R_INVALID_INPUT_LENGTH,
                        "ikm length is :%zu, should be at least %zu",
-                       ikmlen, alg->encodedprivlen);
+                       ikmlen, info->Nsecret);
         goto err;
     }
 
-    suiteid[0] = alg->kemid / 256;
-    suiteid[1] = alg->kemid % 256;
+    suiteid[0] = info->kem_id / 256;
+    suiteid[1] = info->kem_id % 256;
 
-    if (!ossl_hpke_labeled_extract(kdfctx, prk, alg->secretlen,
+    if (!ossl_hpke_labeled_extract(kdfctx, prk, info->Nsecret,
                                    NULL, 0, LABEL_KEM, suiteid, sizeof(suiteid),
                                    OSSL_DHKEM_LABEL_DKP_PRK, ikm, ikmlen))
         goto err;
 
     order = EC_GROUP_get0_order(EC_KEY_get0_group(ec));
     do {
-        if (!ossl_hpke_labeled_expand(kdfctx, privbuf, alg->encodedprivlen,
-                                      prk, alg->secretlen,
+        if (!ossl_hpke_labeled_expand(kdfctx, privbuf, info->Npriv,
+                                      prk, info->Nsecret,
                                       LABEL_KEM, suiteid, sizeof(suiteid),
                                       OSSL_DHKEM_LABEL_CANDIDATE,
                                       &counter, 1))
             goto err;
-        privbuf[0] &= alg->bitmask;
-        if (BN_bin2bn(privbuf, alg->encodedprivlen, priv) == NULL)
+        privbuf[0] &= info->bitmask;
+        if (BN_bin2bn(privbuf, info->Npriv, priv) == NULL)
             goto err;
         if (counter == 0xFF) {
             ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_GENERATE_KEY);
@@ -504,7 +469,7 @@ static EC_KEY *derivekey(PROV_EC_CTX *ctx,
 
     /* Generate a random seed if there is no input ikm */
     if (seed == NULL || seedlen == 0) {
-        seedlen = ctx->alg->encodedprivlen;
+        seedlen = ctx->info->Npriv;
         if (seedlen > sizeof(tmpbuf))
             goto err;
         if (RAND_priv_bytes_ex(ctx->libctx, tmpbuf, seedlen, 0) <= 0)
@@ -604,8 +569,9 @@ static int derive_secret(PROV_EC_CTX *ctx, unsigned char *secret,
     unsigned char kemctx[OSSL_HPKE_MAX_PUBLIC * 3];
     size_t sender_authpublen;
     size_t kemctxlen = 0, dhkmlen = 0;
-    size_t encodedpublen = ctx->alg->encodedpublen;
-    size_t encodedprivlen = ctx->alg->encodedprivlen;
+    const OSSL_HPKE_KEM_INFO *info = ctx->info;
+    size_t encodedpublen = info->Npk;
+    size_t encodedprivlen = info->Npriv;
     int auth = ctx->sender_authkey != NULL;
 
     if (!generate_ecdhkm(privkey1, peerkey1, dhkm, sizeof(dhkm), encodedprivlen))
@@ -635,17 +601,16 @@ static int derive_secret(PROV_EC_CTX *ctx, unsigned char *secret,
         goto err;
 
     /* kemctx is the concat of both sides encoded public key */
-    memcpy(kemctx, sender_pub, ctx->alg->encodedpublen);
-    memcpy(kemctx + ctx->alg->encodedpublen, recipient_pub,
-           ctx->alg->encodedpublen);
+    memcpy(kemctx, sender_pub, info->Npk);
+    memcpy(kemctx + info->Npk, recipient_pub, info->Npk);
     if (auth)
         memcpy(kemctx + 2 * encodedpublen, sender_authpub, encodedpublen);
-    kdfctx = ossl_kdf_ctx_create(ctx->kdfname, ctx->alg->kdfdigestname,
+    kdfctx = ossl_kdf_ctx_create(ctx->kdfname, info->mdname,
                                  ctx->libctx, ctx->propq);
     if (kdfctx == NULL)
         goto err;
-    if (!dhkem_extract_and_expand(kdfctx, secret, ctx->alg->secretlen,
-                                  ctx->alg->kemid, dhkm, dhkmlen,
+    if (!dhkem_extract_and_expand(kdfctx, secret, info->Nsecret,
+                                  info->kem_id, dhkm, dhkmlen,
                                   kemctx, kemctxlen))
         goto err;
     ret = 1;
@@ -682,22 +647,23 @@ static int dhkem_encap(PROV_EC_CTX *ctx,
     unsigned char sender_pub[OSSL_HPKE_MAX_PUBLIC];
     unsigned char recipient_pub[OSSL_HPKE_MAX_PUBLIC];
     size_t sender_publen, recipient_publen;
+    const OSSL_HPKE_KEM_INFO *info = ctx->info;
 
     if (enc == NULL) {
         if (enclen == NULL && secretlen == NULL)
             return 0;
         if (enclen != NULL)
-            *enclen = ctx->alg->encodedpublen;
+            *enclen = info->Nenc;
         if (secretlen != NULL)
-            *secretlen = ctx->alg->secretlen;
+            *secretlen = info->Nsecret;
        return 1;
     }
 
-    if (*secretlen < ctx->alg->secretlen) {
+    if (*secretlen < info->Nsecret) {
         ERR_raise_data(ERR_LIB_PROV, PROV_R_BAD_LENGTH, "*secretlen too small");
         return 0;
     }
-    if (*enclen < ctx->alg->encodedpublen) {
+    if (*enclen < info->Nenc) {
         ERR_raise_data(ERR_LIB_PROV, PROV_R_BAD_LENGTH, "*enclen too small");
         return 0;
     }
@@ -712,7 +678,7 @@ static int dhkem_encap(PROV_EC_CTX *ctx,
                                 &recipient_publen, sizeof(recipient_pub)))
         goto err;
 
-    if (sender_publen != ctx->alg->encodedpublen
+    if (sender_publen != info->Npk
             || recipient_publen != sender_publen) {
         ERR_raise_data(ERR_LIB_PROV, PROV_R_INVALID_KEY, "Invalid public key");
         goto err;
@@ -727,7 +693,7 @@ static int dhkem_encap(PROV_EC_CTX *ctx,
     /* Return the senders ephemeral public key in encoded form */
     memcpy(enc, sender_pub, sender_publen);
     *enclen = sender_publen;
-    *secretlen = ctx->alg->secretlen;
+    *secretlen = info->Nsecret;
     ret = 1;
 err:
     EC_KEY_free(sender_ephemkey);
@@ -756,16 +722,17 @@ static int dhkem_decap(PROV_EC_CTX *ctx,
 {
     int ret = 0;
     EC_KEY *sender_ephempubkey = NULL;
+    const OSSL_HPKE_KEM_INFO *info = ctx->info;
     unsigned char recipient_pub[OSSL_HPKE_MAX_PUBLIC];
     size_t recipient_publen;
-    size_t encodedpublen = ctx->alg->encodedpublen;
+    size_t encodedpublen = info->Npk;
 
     if (secret == NULL) {
-        *secretlen = ctx->alg->secretlen;
+        *secretlen = info->Nsecret;
         return 1;
     }
 
-    if (*secretlen < ctx->alg->secretlen) {
+    if (*secretlen < info->Nsecret) {
         ERR_raise_data(ERR_LIB_PROV, PROV_R_BAD_LENGTH, "*secretlen too small");
         return 0;
     }
@@ -790,7 +757,7 @@ static int dhkem_decap(PROV_EC_CTX *ctx,
                        ctx->recipient_key, ctx->sender_authkey,
                        enc, recipient_pub))
         goto err;
-    *secretlen = ctx->alg->secretlen;
+    *secretlen = info->Nsecret;
     ret = 1;
 err:
     EC_KEY_free(sender_ephempubkey);

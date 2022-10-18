@@ -149,51 +149,24 @@ static int do_testhpke(const TEST_BASEDATA *base,
                                               base->psk, base->psklen)))
             goto end;
     }
-#define NEWWAY
-#ifdef NEWWAY
     if (!TEST_true(OSSL_HPKE_encap(sealctx, enc, &enclen,
                                    rpub, rpublen,
                                    base->ksinfo, base->ksinfolen)))
         goto end;
-#endif
+    if (!TEST_true(cmpkey(privE, enc, enclen)))
+        goto end;
     for (i = 0; i < (int)aeadsz; ++i) {
         ctlen = sizeof(ct);
         OPENSSL_cleanse(ct, ctlen);
-#ifdef NEWWAY
         if (!TEST_true(OSSL_HPKE_seal(sealctx, ct, &ctlen,
                                       aead[i].aad, aead[i].aadlen,
                                       aead[i].pt, aead[i].ptlen)))
-            goto end;
-#else
-        if (!TEST_true(OSSL_HPKE_sender_seal(sealctx,
-                                             enc, &enclen,
-                                             ct, &ctlen,
-                                             rpub, rpublen,
-                                             base->ksinfo, base->ksinfolen,
-                                             aead[i].aad, aead[i].aadlen,
-                                             aead[i].pt, aead[i].ptlen)))
-            goto end;
-#endif
-        if (!TEST_true(cmpkey(privE, enc, enclen)))
             goto end;
         if (!TEST_true(TEST_mem_eq(ct, ctlen,
                                    aead[i].expected_ct,
                                    aead[i].expected_ctlen)))
             goto end;
     }
-#ifndef NEWWAY
-    if ((int)aeadsz == 0) {
-        /* we must be doing an export only test */
-        if (!TEST_true(OSSL_HPKE_sender_export_encap(sealctx,
-                                                     enc, &enclen,
-                                                     rpub, rpublen,
-                                                     base->ksinfo,
-                                                     base->ksinfolen)))
-            goto end;
-        if (!TEST_true(cmpkey(privE, enc, enclen)))
-            goto end;
-    }
-#endif
     if (!TEST_ptr(openctx = OSSL_HPKE_CTX_new(base->mode, base->suite,
                                               libctx, propq)))
         goto end;
@@ -212,47 +185,26 @@ static int do_testhpke(const TEST_BASEDATA *base,
                                                   authpub, authpublen)))
             goto end;
     }
-#ifdef NEWWAY
     if (!TEST_true(OSSL_HPKE_decap(openctx, enc, enclen, privR,
                                    base->ksinfo, base->ksinfolen)))
         goto end;
-#endif
     for (i = 0; i < (int)aeadsz; ++i) {
         ptoutlen = sizeof(ptout);
         OPENSSL_cleanse(ptout, ptoutlen);
-#ifdef NEWWAY
         if (!TEST_true(OSSL_HPKE_open(openctx, ptout, &ptoutlen,
                                       aead[i].aad, aead[i].aadlen,
                                       aead[i].expected_ct,
                                       aead[i].expected_ctlen)))
             goto end;
-#else
-        if (!TEST_true(OSSL_HPKE_recipient_open(openctx, ptout, &ptoutlen,
-                                                enc, enclen,
-                                                privR,
-                                                base->ksinfo, base->ksinfolen,
-                                                aead[i].aad, aead[i].aadlen,
-                                                aead[i].expected_ct,
-                                                aead[i].expected_ctlen)))
-            goto end;
-#endif
         if (!TEST_mem_eq(aead[i].pt, aead[i].ptlen, ptout, ptoutlen))
             goto end;
     }
-#ifdef NEWWAY
-    if ((int)aeadsz == 0) {
-        /* we must be doing an export only test */
-        if (!TEST_true(OSSL_HPKE_recipient_export_decap(sealctx,
-                                                        enc, enclen,
-                                                        privR,
-                                                        base->ksinfo,
-                                                        base->ksinfolen)))
-            goto end;
-        if (!TEST_true(cmpkey(privE, enc, enclen)))
+    /* check exporters */
+    if ((int) aeadsz != 0) {
+        /* we already encrypted something with sealctx so better reset seq */
+        if (!TEST_true(OSSL_HPKE_CTX_set1_seq(sealctx, 0)))
             goto end;
     }
-#endif
-    /* reset seq in sealctx */
     for (i = 0; i < (int)exportsz; ++i) {
         size_t len = export[i].expected_secretlen;
         unsigned char eval[OSSL_HPKE_MAXSIZE];
@@ -1004,10 +956,11 @@ static int test_hpke_modes_suites(void)
                     } else {
                         startseq = 0;
                     }
-                    erv = OSSL_HPKE_sender_seal(ctx, senderpub, &senderpublen,
-                                                cipher, &cipherlen,
-                                                pub, publen, infop, infolen,
-                                                aadp, aadlen, plain, plainlen);
+                    erv = OSSL_HPKE_encap(ctx, senderpub, &senderpublen,
+                                          pub, publen, infop, infolen);
+                    if (erv != 1) { overallresult = 0; }
+                    erv = OSSL_HPKE_seal(ctx, cipher, &cipherlen,
+                                         aadp, aadlen, plain, plainlen);
                     if (erv != 1) { overallresult = 0; }
                     OSSL_HPKE_CTX_free(ctx);
                     memset(clear, 0, clearlen);
@@ -1030,12 +983,11 @@ static int test_hpke_modes_suites(void)
                         erv = OSSL_HPKE_CTX_set1_seq(rctx, startseq);
                         if (erv != 1) { overallresult = 0; }
                     }
-                    erv = OSSL_HPKE_recipient_open(rctx, clear, &clearlen,
-                                                   senderpub, senderpublen,
-                                                   privp,
-                                                   infop, infolen,
-                                                   aadp, aadlen,
-                                                   cipher, cipherlen);
+                    erv = OSSL_HPKE_decap(rctx, senderpub, senderpublen, privp,
+                                          infop, infolen);
+                    if (erv != 1) { overallresult = 0; }
+                    erv = OSSL_HPKE_open(rctx, clear, &clearlen, aadp, aadlen,
+                                         cipher, cipherlen);
                     if (erv != 1) { overallresult = 0; }
                     OSSL_HPKE_CTX_free(rctx);
                     EVP_PKEY_free(privp);
@@ -1092,10 +1044,10 @@ static int test_hpke_export(void)
     if (!TEST_ptr(ctx = OSSL_HPKE_CTX_new(hpke_mode, hpke_suite,
                                           testctx, NULL)))
         goto end;
-    if (!TEST_true(OSSL_HPKE_sender_seal(ctx, enc, &enclen,
-                                         cipher, &cipherlen, pub, publen,
-                                         NULL, 0, NULL, 0, /* no add, info */
-                                         plain, plainlen)))
+    if (!TEST_true(OSSL_HPKE_encap(ctx, enc, &enclen, pub, publen, NULL, 0)))
+        goto end;
+    if (!TEST_true(OSSL_HPKE_seal(ctx, cipher, &cipherlen, NULL, 0,
+                                   plain, plainlen)))
         goto end;
     if (!TEST_true(OSSL_HPKE_export(ctx, exp, 32,
                                     (unsigned char *)estr, strlen(estr))))
@@ -1103,11 +1055,10 @@ static int test_hpke_export(void)
     if (!TEST_ptr(rctx = OSSL_HPKE_CTX_new(hpke_mode, hpke_suite,
                                            testctx, NULL)))
         goto end;
-    if (!TEST_true(OSSL_HPKE_recipient_open(rctx, clear, &clearlen,
-                                            enc, enclen,
-                                            privp,
-                                            NULL, 0, NULL, 0,
-                                            cipher, cipherlen)))
+    if (!TEST_true(OSSL_HPKE_decap(rctx, enc, enclen, privp, NULL, 0)))
+        goto end;
+    if (!TEST_true(OSSL_HPKE_open(rctx, clear, &clearlen, NULL, 0,
+                                  cipher, cipherlen)))
         goto end;
     if (!TEST_true(OSSL_HPKE_export(rctx, rexp, 32,
                                     (unsigned char *)estr, strlen(estr))))
@@ -1342,6 +1293,35 @@ static int test_hpke_one_ikm_gen(uint16_t kem_id,
     return 1;
 }
 
+static int test_hpke_random_suites(void)
+{
+    OSSL_HPKE_SUITE def_suite = OSSL_HPKE_SUITE_DEFAULT;
+    OSSL_HPKE_SUITE suite = { 0xff01, 0xff02, 0xff03 };
+    OSSL_HPKE_SUITE suite2 = { 0xff01, 0xff02, 0xff03 };
+    unsigned char enc[200];
+    size_t enclen = 200;
+    unsigned char cipher[500];
+    size_t cipherlen = 500;
+
+    if (!TEST_true(OSSL_HPKE_get_grease_value(NULL, NULL, NULL, &suite2,
+                                              enc, &enclen, cipher, cipherlen)))
+        return 0;
+
+
+    if (!TEST_false(OSSL_HPKE_get_grease_value(NULL, NULL, &suite, &suite2,
+                                               enc, &enclen, cipher, cipherlen)))
+        return 0;
+
+    if (!TEST_false(OSSL_HPKE_str2suite("",&suite)))
+        return 0;
+
+    if (!TEST_true(OSSL_HPKE_get_grease_value(NULL, NULL, &def_suite, &suite2,
+                                              enc, &enclen, cipher, cipherlen)))
+        return 0;
+
+    return 1;
+}
+
 static int test_hpke_ikms(void)
 {
     int res = 1;
@@ -1372,33 +1352,6 @@ static int test_hpke_ikms(void)
 
     return res;
 }
-
-static int test_hpke(void)
-{
-    int res = 1;
-
-    res = test_hpke_export();
-    if (res != 1)
-        return res;
-
-    res = test_hpke_modes_suites();
-    if (res != 1)
-        return res;
-
-    res = test_hpke_suite_strs();
-    if (res != 1)
-        return res;
-
-    res = test_hpke_grease();
-    if (res != 1)
-        return res;
-
-    res = test_hpke_ikms();
-    if (res != 1)
-        return res;
-
-    return res;
-}
 /* don't do this yet 'till we move outta evp_extra_test */
 int setup_tests(void)
 {
@@ -1406,7 +1359,12 @@ int setup_tests(void)
     ADD_TEST(x25519kdfsha256_hkdfsha256_aes128gcm_psk_test);
     ADD_TEST(P256kdfsha256_hkdfsha256_aes128gcm_base_test);
     ADD_TEST(export_only_test);
-    ADD_TEST(test_hpke);
+    ADD_TEST(test_hpke_export);
+    ADD_TEST(test_hpke_modes_suites);
+    ADD_TEST(test_hpke_suite_strs);
+    ADD_TEST(test_hpke_grease);
+    ADD_TEST(test_hpke_ikms);
+    ADD_TEST(test_hpke_random_suites);
     return 1;
 }
 void cleanup_tests(void)

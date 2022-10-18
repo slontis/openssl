@@ -32,6 +32,7 @@
 #include "prov/providercommon.h"
 #include "prov/ecx.h"
 #include "crypto/ecx.h"
+#include <openssl/hpke.h>
 #include "internal/hpke_util.h"
 #include "eckem.h"
 

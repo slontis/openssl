@@ -30,6 +30,7 @@
 #include "prov/securitycheck.h"
 #include "prov/providercommon.h"
 
+#include <openssl/hpke.h>
 #include "internal/hpke_util.h"
 #include "crypto/ec.h"
 #include "prov/ecx.h"

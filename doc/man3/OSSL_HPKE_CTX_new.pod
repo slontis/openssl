@@ -8,10 +8,10 @@ OSSL_HPKE_seal, OSSL_HPKE_open, OSSL_HPKE_export,
 OSSL_HPKE_suite_check, OSSL_HPKE_str2suite,
 OSSL_HPKE_keygen, OSSL_HPKE_get_grease_value,
 OSSL_HPKE_get_ciphertext_size, OSSL_HPKE_get_public_encap_size,
-OSSL_HPKE_recommend_ikmelen,
+OSSL_HPKE_get_recommended_ikmelen,
 OSSL_HPKE_CTX_set1_psk, OSSL_HPKE_CTX_set1_ikme,
 OSSL_HPKE_CTX_set1_authpriv, OSSL_HPKE_CTX_set1_authpub,
-OSSL_HPKE_CTX_get0_seq, OSSL_HPKE_CTX_set1_seq
+OSSL_HPKE_CTX_get_seq, OSSL_HPKE_CTX_set_seq
 - Hybrid Public Key Encryption (HPKE) functions
 
 =head1 SYNOPSIS
@@ -30,8 +30,8 @@ OSSL_HPKE_CTX_get0_seq, OSSL_HPKE_CTX_set1_seq
  int OSSL_HPKE_CTX_set1_authpub(OSSL_HPKE_CTX *ctx,
                                 unsigned char *pub,
                                 size_t publen);
- int OSSL_HPKE_CTX_get0_seq(OSSL_HPKE_CTX *ctx, uint64_t *seq);
- int OSSL_HPKE_CTX_set1_seq(OSSL_HPKE_CTX *ctx, uint64_t seq);
+ int OSSL_HPKE_CTX_get_seq(OSSL_HPKE_CTX *ctx, uint64_t *seq);
+ int OSSL_HPKE_CTX_set_seq(OSSL_HPKE_CTX *ctx, uint64_t seq);
  int OSSL_HPKE_CTX_set1_ikme(OSSL_HPKE_CTX *ctx,
                             const unsigned char *ikme, size_t ikmelen);
 
@@ -58,7 +58,7 @@ OSSL_HPKE_CTX_get0_seq, OSSL_HPKE_CTX_set1_seq
                       size_t labellen);
 
  int OSSL_HPKE_keygen(OSSL_LIB_CTX *libctx, const char *propq,
-                      unsigned int mode, OSSL_HPKE_SUITE suite,
+                      OSSL_HPKE_SUITE suite,
                       const unsigned char *ikm, size_t ikmlen,
                       unsigned char *pub, size_t *publen, EVP_PKEY **priv);
 
@@ -74,7 +74,7 @@ OSSL_HPKE_CTX_get0_seq, OSSL_HPKE_CTX_set1_seq
  int OSSL_HPKE_str2suite(const char *str, OSSL_HPKE_SUITE *suite);
  size_t OSSL_HPKE_get_ciphertext_size(OSSL_HPKE_SUITE suite, size_t clearlen);
  size_t OSSL_HPKE_get_public_encap_size(OSSL_HPKE_SUITE suite);
- size_t OSSL_HPKE_recommend_ikmelen(OSSL_HPKE_SUITE suite);
+ size_t OSSL_HPKE_get_recommended_ikmelen(OSSL_HPKE_SUITE suite);
 
 =head1 DESCRIPTION
 
@@ -84,47 +84,158 @@ is likely required before using these APIs.  HPKE is used by various
 other IETF specifications, including the (draft) TLS Encrypted Client 
 Hello (ECH) specification and others.
 
-HPKE is a highly flexible consstruct requiring supporting many optional
-inputs for the various combinations in which modes and algorithms can
-be used.
+HPKE is a highly flexible consstruct supporting many optional inputs for the
+various combinations in which modes and algorithms can be used.
 
-Notes on the various operations supported:
+=head2 Define'd symbols and data strutures
 
-- OSSL_HPKE_seal() is used by senders to encrypt a value to a
-recipient (supplying optional additional authenticated data or
-AAD)
+- Symbols are defined (in include/openssl/hpke.h) for each of the
+IANA-allocated codepoints for HPKE modes ,e.g. OSSL_HPKE_MODE_BASE,
+key encapsulation methods (KEMs), e.g. OSSL_HPKE_KEM_ID_X25519, key
+derivation functions (KDFs), e.g. OSSL_HPKE_KDF_ID_SHA256 and
+authenticated encryption with additional data (AEAD) algorithms,
+e.g. OSSL_HPKE_AEAD_ID_AES_GCM_128.
+
+- The combination of a KEM, KDF and AEAD is represented in the
+OSSL_HPKE_SUITE data structure which maps to how HPKE is used
+in various protocols, and in these APIs.
+
+    typedef struct {
+        uint16_t    kem_id;
+        uint16_t    kdf_id;
+        uint16_t    aead_id;
+    } OSSL_HPKE_SUITE;
+
+- String values for the names of modes and suites are also
+defined, to assist with configuration settings, and an API is
+also provided (OSSL_HPKE_str2suite()) for mapping from those
+strings to an OSSL_HPKE_SUITE data structure.
+
+- An OSSL_HPKE_CTX is an opaque data structure that maintains
+internal state as HPKE operations are carried out.
+
+=head2 Context Construct/Free
+
+- OSSL_HPKE_CTX_new() sets up an opaque instance for internal HPKE
+state as HPKE operations are carried out. The inputs required are
+the HPKE mode and suite. The caller can optionally supply an overall library
+context (see L<OSSL_LIB_CTX(3)>, and property query I<propq>.
+
+- OSSL_HPKE_CTX_free() releases memory associated with
+an OSSL_HPKE_CTX pointer, including free'ing the top level
+data structure.
+
+Each OSSL_HPKE_CTX can be used for multiple calles to OSSL_HPKE_seal()
+or OSSL_HPKE_open(), but only a single call to OSSL_HPKE_encap() or
+OSSL_HPKE_decap() can be done with a given OSSL_HPKE_CTX pointer.
+In other words, calling OSSL_HPKE_encap() or OSSL_HPKE_decap() twice with the same
+OSSL_HPKE_CTX will result in an error. It is also an error to use
+the same OSSL_HPKE_CTX for both sender and receiver, so if e.g. one
+process acts as both sender and reciver then two instances of 
+OSSL_HPKE_CTX will be needed.
+
+=head2 Sender APIs
+
+The sender's goal is to use HPKE to encrypt "to" a public key, via use of a
+KEM, then a KDF and finally an AEAD.  The first step is to encapsulate (using
+OSSL_HPKE_encap()) a public value using the recipient's public key, (and to
+internally derive secrets). This produces the encapsulated public value ("enc")
+to be sent to the recipient in whatever protocol is using HPKE. Having done the
+encapsulation step, teh sender can then make one or more calls to
+OSSL_HPKE_seal() to encrypt plaintexts using the derived secret.
+
+Note that the sequence of outputs from OSSL_HPKE_seal() use an internal
+incremented "nonce" value so are generally presented for decryption in the same
+order.
+
+- OSSL_HPKE_encap() uses the, HPKE context, the recipient public value, an
+optional "info" parameter (that can bind other protocol information such as
+identifiers) and produces the encapsulated public value. In 
+almost all cases the encapsulated public value corresponds to an
+one-time use ephemeral private value created as part of the 
+encapsulation process.
+
+- OSSL_HPKE_seal() takes the HPKE context, the plaintext and optional
+additional authenticated data (AAD) and emits the ciphertext to be
+sent to the recipient, usually alongside the encapsulated public
+value. 
+
+=head2 Recipient APIs
+
+Recipients using HPKE require a less ephemeral private value
+so that the public value can be distirbuted to potential 
+senders via whatever protocol is using HPKE. For this reason,
+recipients will generally generate a key pair and will likely
+need to manage their private key value using standard mechanism
+outside this API. (Private keys use normal EVP_PKEY pointers
+so equally normal private key management mechanisms can be used 
+for the relevant values.)
+
+In order to enable encapsulation, the recipient needs to make
+it's public value available to the sender. As of now, there is
+no HPKE-specific format defined for that - the relevant formatting
+is intended defined by application/protocols that make use of HPKE. So,
+ECH for example defines an ECHConfig data structure that
+combines the public value with other ECH data items. Normal
+library functions must therefore be used to extract the public
+value in the required format based on the EVP_PKEY for the
+private value.
+
+- OSSL_HPKE_keygen() provides a way for recipients to generate
+a key pair based on the HPKE suite to be used. The main output
+is the EVP_PKEY pointer for the private value. An OSSL_LIB_CTX
+and property string can be provided as optional inputs. 
+
+The HPKE specification defines a deterministic key generation
+scheme where the private value is derived from initial keying
+material (IKM), so OSSL_HPKE_keygen() also has an option to
+use that scheme. When NULL/0 values are provided instead of
+a real IKM, then a randomly generated key for the relevant
+suite will be produced.
+
+- OSSL_HPKE_decap() takes as input the sender's 
+encapsulated public value (produced by OSSL_HPKE_encap())
+and the recipient's EVP_PKEY pointer re-generates
+the secret derived by the sender. As before, an optional
+"info" parameter allows for binding that derived secret
+to other application/protocol artefacts.
 
 - OSSL_HPKE_open() is used by the recipient to recover an
-encrypted value sent to it (with optional accompanying AAD)
+encrypted value sent to it, again with optional accompanying
+AAD. As with OSSL_HPKE_seal() there is an internally 
+incrementing nonce value to ciphertexts need to be presented
+in the correct order.
 
-- OSSL_HPKE_CTX_new() sets up an OSSL_HPKE_CTX opaque pointer
-to enable the above operations
+=head2 Exporting Secrets
 
-- before calling OSSL_HPKE_seal() a sender has to run the
-key encapsulation mechanism (KEM) using OSSL_HPKE_encap()
-that uses the recipient public value, an optional "info"
-parameter (that can bind other protocol information such
-as identifiers) - the OSSL_HPKE_encap() operation generates
-ephemeral public/private values for the sender that can 
-be used with multiple calls to OSSL_HPKE_seal(); the 
-sender's ephemeral public value is output from this
-operation
+HPKE also defines a way to produce exported secrets for use by the
+appclication. For this to work, the sender must have frst called
+OSSL_HPKE_encap() and, in order to be able to derive the same exported secret,
+the receiver must have called the corresponding OSSL_HPKE_decap().  In addition
+the suite used when forming an OSSL_HPKE_CTX to be used for exporting secrets
+must use the "fake" encryption algorithm denoted by
+OSSL_HPKE_AEAD_ID_EXPORTONLY. (That means a single OSSL_HPKE_CTX instance
+cannot be used for both "real" encryption and for exporting secrets.)
 
-- before calling OSSL_HPKE_open() a recipient has to run
-the KEM using OSSL_HPKE_decap() with the sender's 
-encapsulated ephemeral public value and the recipient's
-private value (as an EVP_PKEY)
+Once encapsulation/decapsulation is done either side can use the
+OSSL_HPKE_export() operation to derive a new application-visible secret from
+the internally derived secret and an application supplied label.
 
-- both of the above operations update the OSSL_HPKE_CTX
-so that it can be used with multiple calls to OSSL_HPKE_seal()
-or OSSL_HPKE_open()
+Multiple calls to OSSL_HPKE_export() with the same OSSL_HPKE_CTX
+are allowed, though there is again an internally
+incrementing nonce value so that the sequence of exported secrets
+needs to be preserved by the application. The same or different
+labels can be provided to each call, though again applications 
+will need to keep track of what was used when.
 
-- OSSL_HPKE_seal() and OSSL_HPKE_open() calls internally
-uses a nonce value that is incremented with each call so
-the ordering of calls to OSSL_HPKE_seal() and OSSL_HPKE_open()
-need to be synchronised in whatever protocol is using HPKE 
+=head2 Parameter Notes
 
 Notes on the various kinds of input and output for these APIs:
+
+- a NULL pointer is used to represent absence of an optional
+pointer-type parameter; if an additional length is provided
+(e.g. for a buffer) the length provided alongside the NULL
+pointer should be zero
 
 - libctx: an OSSL_LIB_CTX pointer, often NULL
 
@@ -146,16 +257,13 @@ an unsigned char* pointer <foo> and a size_t length value called <foo>len.
 caller-allocated buffer size, and the size-used on successful output. 
 Buffers for plaintexts, ciphertexts, aad and other caller-provided values
 can be any size, other buffers (e.g. for key material, aad, etc.)
-are limited at compile time to be at most OSSL_HPKE_MAXSIZE.
+may be limited at compile time to be at most OSSL_HPKE_MAXSIZE (256).
 
 - private key values are handled as EVP_PKEY pointers. Public key values
 are handled as buffers (as per the previous points), so for example, 
 authpub is a buffer for the HPKE public value to be used for AUTH modes, 
 and authpriv is an EVP_PKEY * for the HPKE private value to be used for 
 AUTH modes
-
-- plain or pt (plaintext) is a buffer for input cleartext to be encrypted or a buffer for 
-recovered plaintext, after decryption, ct is an equivalent ciphertext buffer
 
 - pskid is a string/char* containing a string identifying a pre-shared key (PSK) - it 
 must have a terminating NUL as do all good strings
@@ -181,15 +289,71 @@ in EVP_PKEY form
 calls are made (to be XOR'd with an internal nonce - that type was chosen to
 match other HPKE implemenations
 
-- RFC9180 also defines a method for extracting/deriving new application
-secrets from the key exchange without having to encrypt/decrypt application
-data. That is supported via the OSSL_HPKE_export() API that can be used after
-the caller has ussd OSSL_HPKE_encap() or OSSL_HPKE_decap()
-as appropriate.
+=head2 AUthenicated HPKE Modes
+
+- HPKE defines modes that support KEM-based authentication of the
+sender (OSSL_HPKE_MODE_AUTH and OSSL_HPKE_MODE_PSKAUTH). This is done by
+binding the sender's authentication private/public values into the
+encapsulation/decapsulation operations. (For current suites that 
+doesn't affect the size of the "enc" output.) The key used for
+such modes must also use the same KEM as used for the overall
+exchange. OSSL_HPKE_keygen() can be used to generate the private
+value required. That private value (as an EVP_PKEY*) is then
+injected into the OSSL_HPKE_CTX instance using the OSSL_HPKE_CTX_set1_authpriv() 
+API.
+
+The corresponding public value should be provided to the recipient
+as a buffer. For NIST curves the uncompressed encoding of the
+public value should be supplied. CFRG curves only have one
+encoding. The public value can be used to modify the recipient's
+OSSL_HPKE_CTX instance using the OSSL_HPKE_CTX_set1_authpub()
+API. 
+
+In both cases the OSSL_HPKE_CTX needs to be modified before
+the call to the encapulation/decapsulation operation.
+
+=head2 Pre-Shared Key HPKE modes
+
+HPKE also defines a symmetric equivalent to the authentication
+described above using a pre-shared key (PSK) and a PSK identifier
+(a string). PSKs can be used with the OSSL_HPKE_MODE_PSK and
+OSSL_HPKE_MODE_PSKAUTH modes. In this case the PSK is supplied
+as a (binary) buffer and the PSK identified (pskid) as a string and both
+must be used to modify the OSSL_HPKE_CTX before the
+encapsulation/decapsulation operation via the OSSL_HPKE_CTX_set1_psk()
+API.
+
+Note that the OSSL_HPKE_MODE_PSKAUTH mode requires tha both
+the PSK and the authentication public/private be supplied before
+the encapsulation/decapsulation operation work.
+
+=head2 Use of deterministic key generation for senders
+
+The HPKE specification allows the deterministic key generation
+option to be used by senders. That is generally undesirable as
+it exposes the relevant secret to the application rather then
+preserving it within the library. However, if an application
+has to operate in this manner the IKM can be used to modify 
+the sender's OSSL_HPKE_CTX instance using the OSSL_HPKE_CTX_set1_ikme()
+API. As one would expect that needs to be called prior to the
+call to OSSL_HPLE_encap().
+
+=head2 Re-sequencing
+
+In case some protocol has to deal with e.g. packet loss while still
+being able to decrypt later arriving packets, we provide a way
+to force the increment used for the nonce to the next subsequent
+call to OSSL_HPKE_seal() or OSSL_HPKE_open(). The OSSL_HPLE_CTX_set_seq()
+API can be used for such purposes.
+
+Note that re-use of the same nonce and key with different plaintexts
+is dangerous and can lead to loss of confidentiality. Applications
+therefore need to exercise extreme caution in using this API (and
+would be better off avoiding it probably.)
 
 =head2 Protocol Convenience Functions 
 
-We provide convenience APIs for protocols using
+We provide additional convenience APIs for protocols using
 HPKE where the caller would otherwise need to know internal details
 of local HPKE support and/or algorithms.
 
@@ -198,11 +362,13 @@ KEM, KDF and AEAD functions) is supported locally.
 
 To assist with memory alliocation, OSSL_HPKE_get_ciphertext_size() provides a way
 for the caller to know by how much cipertext is longer than plaintext.
+(AEAD algoriths add a data integrity tag and so there is a small amount of
+ciphertext expansion.)
 
 OSSL_HPKE_get_public_encap_size() provides a way for senders to know how big
 the encapsulated public value will be for a given HPKE suite.
 
-OSSL_HPKE_recommend_ikmelen() allows the caller to get a recommendation
+OSSL_HPKE_get_recommended_ikmelen() allows the caller to get a recommendation
 for how long (in octets) an IKM to use with a given suite. This is needed
 in cases where the same public value needs to be (re-)generated by a 
 sender before calling OSSL_HPKE_seal().
@@ -217,88 +383,87 @@ and AEAD names in that order, e.g. "x25519,hkdf-sha256,aes128gcm". This can
 be used by e.g., command line tools that accept string form names for 
 HPKE codepoints.
 
-=head2 Key Generation
-
-Any OpenSSL-supported method producing an EVP_PKEY for generating keys that
-match the IANA-registered codepoints for HPKE may be used. We also provide
-a specific API that is aware of how those codepoints map to OpenSSL algorithm
-implementations.
-
-OSSL_HPKE_keygen() generates an ECDH private value for use with the
-given HPKE suite. This returns the private key as an
-EVP_PKEY*. Only the kem_id field of the suite input is currently used. If the
-initial key material (IKM) inputs (ikmlen/ikm) are (0/NULL) then a key pair
-will be randomly generated. If those input are nonzero/non-NULL then the 
-deterministic key generation scheme from RFC9180 will be used.
-
-=head2 OSSL_HPKE_CTX manipulating APIs
-
-Callers can construct an OSSL_HPKE_CTX object using OSSL_HPKE_CTX_new() 
-that removes the need to provide repeated input parameters such as the
-libctx, propq, HPKE mode and suite. The OSSL_HPKE_CTX_free()
-function releases that memory.
-
-Three additional attributes may be set for such context objects: a 
-pre-shared key (PSK), a sender authentication key and to control (via set/get)
-the sequence number for the next seal/open operation.
-
-Sender key generation can also be based on the deterministic key generation
-scheme specified in RFC 9180 via the OSSL_HPKE_CTX_set1_ikme() function.
-
-If the "EXPORT-ONLY" mode from RFC 9180 is desired, then OSSL_HPKE_export()
-can be used after a call to OSSL_HPKE_sender_export_encap() or
-OSSL_HPKE_recipient_export_decap() if the relevant export-only AEAD has been
-chosen (OSSL_HPKE_AEAD_ID_EXPORTONLY).
-
 =head1 RETURN VALUES
 
-All functions return 1 for success. Functions may return a negative 
-number, zero or a positive number in the event of an error.
+Unless otherwise stated (e.g. if a size_t or pointer is returned), all
+functions return 1 for success and 0 for failure. Where a pointer is
+returned, a NULL value indicates an error. Where a size_t is returned,
+a zero indicates an error.
 
 =head1 EXAMPLES
 
 This example demonstrates a minimal round-trip using HPKE.
 
+    #include <stddef.h>
+    #include <string.h>
     #include <openssl/hpke.h>
+    #include <openssl/evp.h>
+
+    /* 
+     * this is big enough for this example, real code would need different 
+     * handling
+     */
+    #define LBUFSIZE 48
+
     /* we'll do a round-trip, generating a key, encrypting and decrypting */
-    int hpke_mode=OSSL_HPKE_MODE_BASE;
-    OSSL_HPKE_SUITE hpke_suite = OSSL_HPKE_SUITE_DEFAULT;
-    OSSL_HPKE_CTX *ctx = NULL, *rctx = NULL;
-    size_t publen=OSSL_HPKE_MAXSIZE; unsigned char pub[OSSL_HPKE_MAXSIZE];
-    EVP_PKEY *priv = NULL;
-    size_t enclen=OSSL_HPKE_MAXSIZE; unsigned char enc[OSSL_HPKE_MAXSIZE];
-    size_t plainlen=OSSL_HPKE_MAXSIZE; unsigned char plain[OSSL_HPKE_MAXSIZE];
-    size_t cipherlen=OSSL_HPKE_MAXSIZE; unsigned char cipher[OSSL_HPKE_MAXSIZE];
-    size_t ptlen=OSSL_HPKE_MAXSIZE; unsigned char pt[OSSL_HPKE_MAXSIZE];
+    int main(int argc, char **argv)
+    {
+        int hpke_mode=OSSL_HPKE_MODE_BASE;
+        OSSL_HPKE_SUITE hpke_suite = OSSL_HPKE_SUITE_DEFAULT;
+        OSSL_HPKE_CTX *ctx = NULL, *rctx = NULL;
+        size_t publen=LBUFSIZE; unsigned char pub[LBUFSIZE];
+        EVP_PKEY *priv = NULL;
+        size_t enclen=LBUFSIZE; unsigned char enc[LBUFSIZE];
+        size_t ctlen=LBUFSIZE; unsigned char ct[LBUFSIZE];
+        size_t ptlen=LBUFSIZE; unsigned char pt[LBUFSIZE];
+        size_t clearlen=LBUFSIZE; unsigned char clear[LBUFSIZE];
+        size_t aadlen=LBUFSIZE; unsigned char aad[LBUFSIZE];
+        size_t infolen=LBUFSIZE; unsigned char info[LBUFSIZE];
 
-    memset(pt,0,OSSL_HPKE_MAXSIZE);
-    strcpy((char*)pt,"a message not in a bottle");
-    ptlen=strlen((char*)pt);
+        memset(pt,0,LBUFSIZE);
+        memset(aad,0,LBUFSIZE);
+        memset(info,0,LBUFSIZE);
+        strcpy((char*)pt,"a message not in a bottle");
+        ptlen=strlen((char*)pt);
 
-    /* generate receiver's key pair */
-    OSSL_HPKE_keygen(NULL, NULL, hpke_mode, hpke_suite,
-                         &publen, pub, &priv);
+        /* generate receiver's key pair */
+        if (OSSL_HPKE_keygen(NULL, NULL, hpke_suite, NULL, 0,
+                             pub, &publen, &priv) != 1)
+            goto err;
 
-    /* sender's actions */
-    ctx = OSSL_HPKE_CTX_new(hpke_mode, hpke_suite, NULL, NULL);
-    OSSL_HPKE_encap(ctx, enc, &enclen,
-                    pub, publen,
-                    infop, infolen);
-    OSSL_HPKE_seal(ctx, cipher, &cipherlen,
-                   aadp, aadlen, plain, plainlen);
-    OSSL_HPKE_CTX_free(ctx);
+        /* sender's actions */
+        if ((ctx = OSSL_HPKE_CTX_new(hpke_mode, hpke_suite, NULL, NULL)) == NULL)
+            goto err;
+        if (OSSL_HPKE_encap(ctx, enc, &enclen, pub, publen, info, infolen) != 1)
+            goto err;
+        if (OSSL_HPKE_seal(ctx, ct, &ctlen, aad, aadlen, pt, ptlen) != 1)
+            goto err;
 
-    /* receiver's actions */
-    rctx = OSSL_HPKE_CTX_new(hpke_mode, hpke_suite, NULL, NULL);
-    OSSL_HPKE_decap(rctx, enc, enclen, privp,
-                    infop, infolen);
-    OSSL_HPKE_open(rctx, clear, &clearlen,
-                   aadp, aadlen, cipher, cipherlen);
-    OSSL_HPKE_CTX_free(rctx);
+        /* receiver's actions */
+        if ((rctx = OSSL_HPKE_CTX_new(hpke_mode, hpke_suite, NULL, NULL)) == NULL)
+            goto err;
+        if (OSSL_HPKE_decap(rctx, enc, enclen, priv, info, infolen) != 1) 
+            goto err;
+        if (OSSL_HPKE_open(rctx, clear, &clearlen, aad, aadlen, ct, ctlen) != 1)
+            goto err;
+        OSSL_HPKE_CTX_free(rctx);
+        OSSL_HPKE_CTX_free(ctx);
+        EVP_PKEY_free(priv);
+        printf("All good\n");
+        return 1;
+
+    err:
+        /* clean up */
+        printf("Error!\n");
+        OSSL_HPKE_CTX_free(rctx);
+        OSSL_HPKE_CTX_free(ctx);
+        EVP_PKEY_free(priv);
+        return 0;
+    }
 
 =head1 DANGER
 
-Note that the OSSL_HPKE_CTX_set1_seq() API could be dangerous - if used with
+Note that the OSSL_HPKE_CTX_set_seq() API could be dangerous - if used with
 GCM that could lead to nonce-reuse, which is a known danger. So avoid that
 entirely, or be very very careful when using that API.
 

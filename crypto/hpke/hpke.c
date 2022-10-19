@@ -421,7 +421,7 @@ static int hpke_mode_check(unsigned int mode)
  * @brief check if a suite is supported locally
  *
  * @param suite is the suite to check
- * @return 1 for good/supported, not 1 otherwise
+ * @return 1 for good/supported, 0 otherwise
  */
 static int hpke_suite_check(OSSL_HPKE_SUITE suite)
 {
@@ -450,7 +450,7 @@ static int hpke_suite_check(OSSL_HPKE_SUITE suite)
  * @return 1 for good (OpenSSL style), not 1 for error
  */
 static int hpke_kg_evp(OSSL_LIB_CTX *libctx, const char *propq,
-                       unsigned int mode, OSSL_HPKE_SUITE suite,
+                       OSSL_HPKE_SUITE suite,
                        size_t ikmlen, const unsigned char *ikm,
                        size_t *publen, unsigned char *pub,
                        EVP_PKEY **priv)
@@ -580,6 +580,7 @@ static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
     int erv = 0;
     size_t plen = 0;
     const OSSL_HPKE_KEM_INFO *kem_info = NULL;
+    const OSSL_HPKE_AEAD_INFO *aead_info = NULL;
 
     if (pub == NULL || !pub_len
         || ciphertext == NULL || !ciphertext_len || suite == NULL)
@@ -599,9 +600,18 @@ static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
+    aead_info = ossl_HPKE_AEAD_INFO_find_id(chosen.aead_id);
+    if (aead_info == NULL) {
+        erv = 0;
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
     if ((crv = hpke_suite_check(chosen)) != 1)
         return 0;
     *suite = chosen;
+    /* make sure room for tag and one plaintext octet */
+    if (aead_info->taglen >= ciphertext_len)
+        return 0;
     /* publen */
     plen = kem_info->Npk;
     if (plen > *pub_len)
@@ -1226,7 +1236,7 @@ int OSSL_HPKE_CTX_set1_authpub(OSSL_HPKE_CTX *ctx,
  * The value returned is the most recent used when sealing
  * or opening (successfully)
  */
-int OSSL_HPKE_CTX_get0_seq(OSSL_HPKE_CTX *ctx, uint64_t *seq)
+int OSSL_HPKE_CTX_get_seq(OSSL_HPKE_CTX *ctx, uint64_t *seq)
 {
     if (ctx == NULL || seq == NULL)
         return 0;
@@ -1243,7 +1253,7 @@ int OSSL_HPKE_CTX_get0_seq(OSSL_HPKE_CTX *ctx, uint64_t *seq)
  * The value returned is the most recent used when sealing
  * or opening (successfully)
  */
-int OSSL_HPKE_CTX_set1_seq(OSSL_HPKE_CTX *ctx, uint64_t seq)
+int OSSL_HPKE_CTX_set_seq(OSSL_HPKE_CTX *ctx, uint64_t seq)
 {
     if (ctx == NULL)
         return 0;
@@ -1539,7 +1549,6 @@ int OSSL_HPKE_export(OSSL_HPKE_CTX *ctx,
  * @brief generate a key pair
  * @param libctx is the context to use
  * @param propq is a properties string
- * @param mode is the mode (currently unused)
  * @param suite is the ciphersuite (currently unused)
  * @param ikmlen is the length of IKM, if supplied
  * @param ikm is IKM, if supplied
@@ -1549,12 +1558,12 @@ int OSSL_HPKE_export(OSSL_HPKE_CTX *ctx,
  * @return 1 for good (OpenSSL style), not-1 for error
  */
 int OSSL_HPKE_keygen(OSSL_LIB_CTX *libctx, const char *propq,
-                     unsigned int mode, OSSL_HPKE_SUITE suite,
+                     OSSL_HPKE_SUITE suite,
                      const unsigned char *ikm, size_t ikmlen,
                      unsigned char *pub, size_t *publen,
                      EVP_PKEY **priv)
 {
-    return hpke_kg_evp(libctx, propq, mode, suite,
+    return hpke_kg_evp(libctx, propq, suite,
                        ikmlen, ikm, publen, pub, priv);
 }
 
@@ -1663,7 +1672,7 @@ size_t OSSL_HPKE_get_public_encap_size(OSSL_HPKE_SUITE suite)
  * size of a private value. In future, it could also
  * factor in e.g. the AEAD.
  */
-size_t OSSL_HPKE_recommend_ikmelen(OSSL_HPKE_SUITE suite)
+size_t OSSL_HPKE_get_recommended_ikmelen(OSSL_HPKE_SUITE suite)
 {
     const OSSL_HPKE_KEM_INFO *kem_info = NULL;
 

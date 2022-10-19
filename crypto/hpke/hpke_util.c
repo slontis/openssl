@@ -30,6 +30,9 @@ static const char LABEL_HPKEV1[] = "\x48\x50\x4B\x45\x2D\x76\x31";
  * and the tables below, corresponding additions should also be
  * made to the synonymtab tables a little further down so that
  * OSSL_HPKE_str2suite() continues to function correctly.
+ *
+ * The canonical place to check for IANA registered codepoints
+ * is: https://www.iana.org/assignments/hpke/hpke.xhtml
  */
 
 /*
@@ -157,17 +160,6 @@ const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_random(OSSL_LIB_CTX *ctx)
     return &hpke_kem_tab[rval % sz];
 }
 
-/*
- * TODO: add new values to include/openssl/proverr.h
- * not sure how to allocate numbers just yet though
- * or maybe there're better error numbers
- */
-#ifndef PROV_R_INVALID_KDF
-# define PROV_R_INVALID_KDF PROV_R_INVALID_DIGEST
-#endif
-#ifndef PROV_R_INVALID_AEAD
-# define PROV_R_INVALID_AEAD PROV_R_INVALID_KEY
-#endif
 
 const OSSL_HPKE_KDF_INFO *ossl_HPKE_KDF_INFO_find_id(uint16_t kdfid)
 {

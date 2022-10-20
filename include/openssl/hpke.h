@@ -44,12 +44,6 @@
 # define OSSL_HPKE_AEAD_ID_CHACHA_POLY1305 0x0003 /**< Chacha20-Poly1305 */
 # define OSSL_HPKE_AEAD_ID_EXPORTONLY      0xFFFF /**< export-only fake ID */
 
-/* strings for modes */
-# define OSSL_HPKE_MODESTR_BASE       "base"    /**< base mode (1) */
-# define OSSL_HPKE_MODESTR_PSK        "psk"     /**< psk mode (2) */
-# define OSSL_HPKE_MODESTR_AUTH       "auth"    /**< sender-key pair auth (3) */
-# define OSSL_HPKE_MODESTR_PSKAUTH    "pskauth" /**< psk+sender-key pair (4) */
-
 /* strings for suite components - ideally these'd be defined elsewhere */
 # define OSSL_HPKE_KEMSTR_P256        "P-256"              /**< KEM id 0x10 */
 # define OSSL_HPKE_KEMSTR_P384        "P-384"              /**< KEM id 0x11 */

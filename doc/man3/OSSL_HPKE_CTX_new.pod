@@ -155,10 +155,9 @@ The AEAD identifier I<aead_id> is one of the following:
 
 =item 0xFFFF B<SSL_HPKE_AEAD_ID_EXPORTONLY>
 
-This identifier indicates that aead operations are
-not needed. OSSL_HPKE_export() can be used, but
-OSSL_HPKE_open() and OSSL_HPKE_seal() will return an error
-if called.
+The last identifier above indicates that AEAD operations are not needed.
+OSSL_HPKE_export() can be used, but OSSL_HPKE_open() and OSSL_HPKE_seal() will
+return an error if called with a context using that AEAD identifier.
 
 =back
 
@@ -168,19 +167,19 @@ HPKE supports the following variants of Authentication using a mode Identifier:
 
 =over 4
 
-=item 0 B<OSSL_HPKE_MODE_BASE>
+=item B<OSSL_HPKE_MODE_BASE>
 
 Authentication is not used.
 
-=item 1 <OSSL_HPKE_MODE_PSK>
+=item B<OSSL_HPKE_MODE_PSK>
 
 Authenticates possession of a pre-shared key (PSK).
 
-=item 2 <OSSL_HPKE_MODE_AUTH>
+=item B<OSSL_HPKE_MODE_AUTH>
 
 Authenticates possession of a KEM-based sender private key.
 
-=item 3 <OSSL_HPKE_MODE_PSKAUTH>
+=item B<OSSL_HPKE_MODE_PSKAUTH>
 
 A combination of B<OSSL_HPKE_MODE_PSK> and B<OSSL_HPKE_MODE_AUTH>.
 Both the PSK and the senders authentication public/private must be
@@ -212,21 +211,28 @@ OSSL_HPKE_encap()) the sender's public value using the recipient's public key,
 encapsulation step, the sender can then make one or more calls to
 OSSL_HPKE_seal() to encrypt plaintexts using the secret stored within I<ctx>.
 
-
-OSSL_HPKE_encap() uses the HPKE context I<ctx>, the recipient public value 
-I<pub>, and an optional I<info> parameter that can bind other protocol information such as
-identifiers, and produces the encapsulated public value I<enc>.
-Generally, the encapsulated public value I<enc> corresponds to a
-single-use ephemeral private value created as part of the 
-encapsulation process. Only a single call to OSSL_HPKE_encap() is allowed for a given
+OSSL_HPKE_encap() uses the HPKE context I<ctx>, the recipient public value
+I<pub>, and an optional I<info> parameter that can bind other protocol or
+application artefacts such as identifiers, and produces the encapsulated public
+value I<enc>.  Generally, the encapsulated public value I<enc> corresponds to a
+single-use ephemeral private value created as part of the encapsulation
+process. Only a single call to OSSL_HPKE_encap() is allowed for a given
 B<OSSL_HPKE_CTX>.
 
-OSSL_HPKE_seal() takes the B<OSSL_HPKE_CTX> context I<ctx>, the plaintext I<pt>
-of size I<ptlen> and optional additional authenticated data I<aad> of size I<aadlen>,
-and returns the ciphertext I<ct> of size I< ctlen>.
-OSSL_HPKE_encap() must be called before the OSSL_HPKE_seal().
-OSSL_HPKE_seal() may be called multiple times, since the "nonce" is incremented
-internally.
+All input buffers (such as I<pub> above) are presented to these APIs using a pair of
+parameters: an unsigned char* pointer I<foo> and a size_t length value called
+I<foolen>. All input/output buffers (such as I<enc> above) are similarly presented 
+but with the length being a pointer to a size_t that on input should have the
+caller-allocated buffer size and that on successful output will have the length
+of the value placed in that buffer. (If the buffer size is too small an error
+will occur.)
+
+OSSL_HPKE_seal() takes the B<OSSL_HPKE_CTX> context I<ctx>, the plaintext
+buffer I<pt> of size I<ptlen> and optional additional authenticated data buffer
+I<aad> of size I<aadlen>, and returns the ciphertext I<ct> of size I< ctlen>.
+OSSL_HPKE_encap() must be called before the OSSL_HPKE_seal().  OSSL_HPKE_seal()
+may be called multiple times, with an internal "nonce" being incremented by one
+after each call.
 
 =head2 Recipient APIs
 
@@ -278,10 +284,11 @@ HPKE defines a way to produce exported secrets for use by the
 appclication. For this to work, the sender must have frst called
 OSSL_HPKE_encap() and, in order to be able to derive the same exported secret,
 and the receiver must have called the corresponding OSSL_HPKE_decap().  
-The I<suite> used when forming an OSSL_HPKE_CTX to be used for exporting secrets
-must use the "fake" encryption algorithm denoted by the identifier
-I<OSSL_HPKE_AEAD_ID_EXPORTONLY>. (That means a single OSSL_HPKE_CTX instance
-cannot be used for both "real" encryption and for exporting secrets.)
+
+If no "real" encryption or decryption operations are needed in a given
+application context, then the I<suite> used when forming an OSSL_HPKE_CTX to be
+used for exporting secrets can use the "fake" AEAD identifier denoted by
+I<OSSL_HPKE_AEAD_ID_EXPORTONLY>.
 
 Once encapsulation/decapsulation is done either side can use the
 OSSL_HPKE_export() operation to derive a new application-visible secret from
@@ -317,7 +324,7 @@ HPKE also defines a symmetric equivalent to the authentication described above
 using a pre-shared key (PSK) and a PSK identifier. PSKs can be used with the
 B<OSSL_HPKE_MODE_PSK> and B<OSSL_HPKE_MODE_PSKAUTH> modes.
 
-OSSL_HPKE_CTX_set1_psk() sets the PSK identifier I<pskid) string, and PSK buffer
+OSSL_HPKE_CTX_set1_psk() sets the PSK identifier I<pskid> string, and PSK buffer
 I<psk> of length I<psklen> into the I<ctx>. If required this must be called
 before OSSL_HPKE_encap() or OSSL_HPKE_decap().
 As PSKs are symmetric the same calls must happen on both sender and receiver
@@ -400,45 +407,6 @@ codepoints. Valid names are:
 String variants of the numbers listed in L</OSSL_HPKE_SUITE Identifiers>
 can also be used.
 
-=head2 Parameter Notes
-
-Notes on the various kinds of input and output for these APIs:
-
-=over 4
-
-- buffers: all buffers are presented to these APIs using a pair of parameters:
-an unsigned char* pointer I<foo> and a size_t length value called I<foolen>.
-
-- for input/output buffers, the (pointer to the) length on input is the
-caller-allocated buffer size, and the size-used on successful output. 
-Buffers for plaintexts, ciphertexts, aad and other caller-provided values
-can be any size, other buffers (for example for key material, aad, etc.)
-may be limited at compile time to be at most OSSL_HPKE_MAXSIZE (256).
-
-- private key values are handled as L<EVP_PKEY(3)> pointers. Public key values
-are handled as buffers
-
-- I<aad> is a buffer for additional authenticated data
-
-- I<info> is a buffer for information to be bound to the HPKE exchange (generally
-to "fold in" identity information)
-
-- I<pub> is the receiver's typically non-ephemeral public value to which a
-sender will encrypt (basically an ECDH public key, though in future that
-could be less true)
-
-- I<enc> is a buffer for the ephemeral encapsulaed public value generated
-by the sender (encryptor) and to be used by the recipient (decryptor) 
-
-- I<priv> is the receiver's typically non-ephemeral ECDH private value for decryption
-in L<EVP_PKEY(3)> form
-
-- I<seq> is a uint64_t representing the sequencing of encryptions when multiple
-calls are made (to be XOR'd with an internal nonce - that type was chosen to
-match other HPKE implemenations)
-
-=back
-
 =head1 RETURN VALUES
 
 OSSL_HPKE_CTX_new() returns an OSSL_HPKE_CTX pointer or NULL on error.
@@ -481,7 +449,6 @@ This example demonstrates a minimal round-trip using HPKE.
         size_t ctlen = sizeof(ct);
         unsigned char clear[LBUFSIZE];
         size_t clearlen = sizeof(clear);
-        
         const unsigned char *pt = "a message not in a bottle";
         size_t ptlen = strlen((char *)pt);
         const unsigned char *info = "Some info";
@@ -522,10 +489,10 @@ This example demonstrates a minimal round-trip using HPKE.
         return 0;
     }
 
-=head1 WARNING
+=head1 WARNINGS
 
-Note that the OSSL_HPKE_CTX_set_seq() API could be dangerous - if used with
-GCM that could lead to nonce-reuse, which is a known danger. So avoid that
+Note that the OSSL_HPKE_CTX_set_seq() API could be dangerous - if used with GCM
+that could lead to nonce-reuse, which is a known danger. So avoid that
 entirely, or be very very careful when using that API.
 
 Use of an IKM value for deterministic key generation (via

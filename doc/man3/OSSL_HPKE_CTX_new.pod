@@ -486,7 +486,7 @@ This example demonstrates a minimal round-trip using HPKE.
         size_t ptlen = strlen((char *)pt);
         const unsigned char *info = "Some info";
         size_t infolen = strlen((char *)info);
-        unsigned char *aad = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        unsigned char aad[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
         size_t aadlen = sizeof(aad);
 
         /*
@@ -517,7 +517,7 @@ This example demonstrates a minimal round-trip using HPKE.
         /* clean up */
         printf(ok ? "All Good!\n" : "Error!\n");
         OSSL_HPKE_CTX_free(rctx);
-        OSSL_HPKE_CTX_free(ctx);
+        OSSL_HPKE_CTX_free(sctx);
         EVP_PKEY_free(priv);
         return 0;
     }

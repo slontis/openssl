@@ -7,10 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
-/**
- * @file
- * An OpenSSL-based HPKE implementation of RFC9180
- */
+/* An OpenSSL-based HPKE implementation of RFC9180 */
 
 #include <string.h>
 #include <openssl/rand.h>
@@ -570,61 +567,70 @@ static int hpke_random_suite(OSSL_LIB_CTX *libctx,
 static int hpke_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
                                  OSSL_HPKE_SUITE *suite_in,
                                  OSSL_HPKE_SUITE *suite,
-                                 unsigned char *pub,
-                                 size_t *pub_len,
-                                 unsigned char *ciphertext,
-                                 size_t ciphertext_len)
+                                 unsigned char *enc,
+                                 size_t *enclen,
+                                 unsigned char *ct,
+                                 size_t ctlen)
 {
     OSSL_HPKE_SUITE chosen;
-    int crv = 0;
-    int erv = 0;
     size_t plen = 0;
     const OSSL_HPKE_KEM_INFO *kem_info = NULL;
     const OSSL_HPKE_AEAD_INFO *aead_info = NULL;
 
-    if (pub == NULL || !pub_len
-        || ciphertext == NULL || !ciphertext_len || suite == NULL)
+    if (enc == NULL || !enclen
+        || ct == NULL || ctlen == 0 || suite == NULL)
         return 0;
     if (suite_in == NULL) {
         /* choose a random suite */
-        crv = hpke_random_suite(libctx, propq, &chosen);
-        if (crv != 1)
-            return crv;
+        if (hpke_random_suite(libctx, propq, &chosen) != 1) {
+            ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+            goto err;
+        }
     } else {
         chosen = *suite_in;
     }
-
     kem_info = ossl_HPKE_KEM_INFO_find_id(chosen.kem_id);
     if (kem_info == NULL) {
-        erv = 0;
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
     aead_info = ossl_HPKE_AEAD_INFO_find_id(chosen.aead_id);
     if (aead_info == NULL) {
-        erv = 0;
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         goto err;
     }
-    if ((crv = hpke_suite_check(chosen)) != 1)
-        return 0;
+    if (hpke_suite_check(chosen) != 1) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
     *suite = chosen;
     /* make sure room for tag and one plaintext octet */
-    if (aead_info->taglen >= ciphertext_len)
-        return 0;
+    if (aead_info->taglen >= ctlen) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
     /* publen */
     plen = kem_info->Npk;
-    if (plen > *pub_len)
-        return 0;
-    if (RAND_bytes_ex(libctx, pub, plen, OSSL_HPKE_RSTRENGTH) <= 0)
-        return 0;
-    *pub_len = plen;
-    if (RAND_bytes_ex(libctx, ciphertext, ciphertext_len,
-                      OSSL_HPKE_RSTRENGTH) <= 0)
-        return 0;
+    if (plen > *enclen) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
+    if (RAND_bytes_ex(libctx, enc, plen, OSSL_HPKE_RSTRENGTH) <= 0) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
+    *enclen = plen;
+    /* if NIST curve chosen set 1st octet to 0x04 */
+    if (hpke_kem_id_nist_curve(chosen.kem_id) == 1) {
+        enc[0] = 0x04;
+    }
+    if (RAND_bytes_ex(libctx, ct, ctlen, OSSL_HPKE_RSTRENGTH) <= 0) {
+        ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
     return 1;
 err:
-    return erv;
+    return 0;
 }
 
 /*
@@ -1186,9 +1192,9 @@ int OSSL_HPKE_CTX_set1_ikme(OSSL_HPKE_CTX *ctx,
  * @param privp is an EVP_PKEY form of the private key
  * @return 1 for success, 0 for error
  */
-int OSSL_HPKE_CTX_set1_authpriv(OSSL_HPKE_CTX *ctx, EVP_PKEY *privp)
+int OSSL_HPKE_CTX_set1_authpriv(OSSL_HPKE_CTX *ctx, EVP_PKEY *priv)
 {
-    if (ctx == NULL || privp == NULL) {
+    if (ctx == NULL || priv == NULL) {
         ERR_raise(ERR_LIB_CRYPTO, ERR_R_INTERNAL_ERROR);
         return 0;
     }
@@ -1199,7 +1205,7 @@ int OSSL_HPKE_CTX_set1_authpriv(OSSL_HPKE_CTX *ctx, EVP_PKEY *privp)
     }
     if (ctx->authpriv != NULL)
         EVP_PKEY_free(ctx->authpriv);
-    ctx->authpriv = EVP_PKEY_dup(privp);
+    ctx->authpriv = EVP_PKEY_dup(priv);
     if (ctx->authpriv == NULL)
         return 0;
     return 1;
@@ -1596,13 +1602,13 @@ int OSSL_HPKE_suite_check(OSSL_HPKE_SUITE suite)
 int OSSL_HPKE_get_grease_value(OSSL_LIB_CTX *libctx, const char *propq,
                                OSSL_HPKE_SUITE *suite_in,
                                OSSL_HPKE_SUITE *suite,
-                               unsigned char *pub,
-                               size_t *pub_len,
-                               unsigned char *cipher,
-                               size_t cipher_len)
+                               unsigned char *enc,
+                               size_t *enclen,
+                               unsigned char *ct,
+                               size_t ctlen)
 {
     return hpke_get_grease_value(libctx, propq, suite_in, suite,
-                                 pub, pub_len, cipher, cipher_len);
+                                 enc, enclen, ct, ctlen);
 }
 
 /*

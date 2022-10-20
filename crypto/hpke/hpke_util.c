@@ -160,7 +160,6 @@ const OSSL_HPKE_KEM_INFO *ossl_HPKE_KEM_INFO_find_random(OSSL_LIB_CTX *ctx)
     return &hpke_kem_tab[rval % sz];
 }
 
-
 const OSSL_HPKE_KDF_INFO *ossl_HPKE_KDF_INFO_find_id(uint16_t kdfid)
 {
     int i;

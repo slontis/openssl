@@ -147,13 +147,13 @@ The AEAD identifier I<aead_id> is one of the following:
 
 =over 4
 
-=item 0x01 B<SSL_HPKE_AEAD_ID_AES_GCM_128>
+=item 0x01 B<OSSL_HPKE_AEAD_ID_AES_GCM_128>
 
-=item 0x02 B<SSL_HPKE_AEAD_ID_AES_GCM_256>
+=item 0x02 B<OSSL_HPKE_AEAD_ID_AES_GCM_256>
 
-=item 0x03 B<SSL_HPKE_AEAD_ID_CHACHA_POLY1305>
+=item 0x03 B<OSSL_HPKE_AEAD_ID_CHACHA_POLY1305>
 
-=item 0xFFFF B<SSL_HPKE_AEAD_ID_EXPORTONLY>
+=item 0xFFFF B<OSSL_HPKE_AEAD_ID_EXPORTONLY>
 
 The last identifier above indicates that AEAD operations are not needed.
 OSSL_HPKE_export() can be used, but OSSL_HPKE_open() and OSSL_HPKE_seal() will
@@ -167,19 +167,19 @@ HPKE supports the following variants of Authentication using a mode Identifier:
 
 =over 4
 
-=item B<OSSL_HPKE_MODE_BASE>
+=item B<OSSL_HPKE_MODE_BASE>, 0x00
 
 Authentication is not used.
 
-=item B<OSSL_HPKE_MODE_PSK>
+=item B<OSSL_HPKE_MODE_PSK>, 0x01
 
 Authenticates possession of a pre-shared key (PSK).
 
-=item B<OSSL_HPKE_MODE_AUTH>
+=item B<OSSL_HPKE_MODE_AUTH>, 0x02
 
 Authenticates possession of a KEM-based sender private key.
 
-=item B<OSSL_HPKE_MODE_PSKAUTH>
+=item B<OSSL_HPKE_MODE_PSKAUTH>, 0x03
 
 A combination of B<OSSL_HPKE_MODE_PSK> and B<OSSL_HPKE_MODE_AUTH>.
 Both the PSK and the senders authentication public/private must be
@@ -293,14 +293,14 @@ I<OSSL_HPKE_AEAD_ID_EXPORTONLY>.
 Once encapsulation/decapsulation is done either side can use the
 OSSL_HPKE_export() operation to derive a new application-visible secret from
 the internally derived secret and an application supplied I<label>.
-The output exported secret will be returned in the I<secret> parameter.
+The output exported secret will be returned in the I<secret> parameter
+with the provided I<secretlen> length.
 
 Multiple calls to OSSL_HPKE_export() with the same OSSL_HPKE_CTX
-are supported, though there is again an internally
-incrementing nonce value so that the sequence of exported secrets
-needs to be managed by the application. The same or different
-I<label> values can be provided to each call, though again applications 
-will need to keep track of what was used when.
+are supported, but as there is no real encryption there is no 
+incrementing nonce value so the same I<secret> output will be returned
+for a given OSSL_HPKE_CTX if the same I<label> and I<secretlen> inputs 
+are provided multiple times.
 
 =head2 Sender-authenticated HPKE Modes
 

@@ -287,6 +287,11 @@ struct evp_md_st {
 
 } /* EVP_MD */ ;
 
+
+struct evp_aead_st {
+    EVP_CIPHER *cipher; // The old implementation
+};
+
 struct evp_cipher_st {
     int nid;
 

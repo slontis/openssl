@@ -5505,3 +5505,16 @@ OSSL_HPKE_open                          ?	3_2_0	EXIST::FUNCTION:
 OSSL_HPKE_CTX_get_seq                   ?	3_2_0	EXIST::FUNCTION:
 OSSL_HPKE_CTX_set_seq                   ?	3_2_0	EXIST::FUNCTION:
 OSSL_HPKE_get_recommended_ikmelen       ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_free                       ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_reset                      ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_init                       ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_seal                       ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_open                       ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_set_params                 ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_settable_params            ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_get0_aead                  ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_get_key_length                 ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_get_max_overhead               ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_get_max_tag_len                ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_get_nonce_length               ?	3_2_0	EXIST::FUNCTION:
+EVP_AEAD_CTX_new_from_cipher            ?	3_2_0	EXIST::FUNCTION:

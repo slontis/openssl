@@ -61,6 +61,12 @@ struct evp_cipher_ctx_st {
     EVP_CIPHER *fetched_cipher;
 } /* EVP_CIPHER_CTX */ ;
 
+struct evp_aead_ctx_st {
+    EVP_AEAD *meth;               /* Method structure */
+    EVP_CIPHER_CTX *ciphctx;
+    size_t taglen;                /* Optional Truncated tag */
+} /* EVP_AEAD_CTX */;
+
 struct evp_mac_ctx_st {
     EVP_MAC *meth;               /* Method structure */
     /*

@@ -63,6 +63,10 @@ extern "C" {
 #define OSSL_ALG_PARAM_MAC          "mac"       /* utf8_string */
 #define OSSL_ALG_PARAM_PROPERTIES   "properties"/* utf8_string */
 
+/* aead parameters */
+#define OSSL_AEAD_PARAM_IV                     "iv"
+#define OSSL_AEAD_PARAM_TAGLEN                 "taglen"
+
 /* cipher parameters */
 #define OSSL_CIPHER_PARAM_PADDING              "padding"      /* uint */
 #define OSSL_CIPHER_PARAM_USE_BITS             "use-bits"     /* uint */

@@ -101,6 +101,8 @@ STACK_OF(BIGNUM_const);
 
 typedef struct err_state_st ERR_STATE;
 
+typedef struct evp_aead_st EVP_AEAD;
+typedef struct evp_aead_ctx_st EVP_AEAD_CTX;
 typedef struct evp_cipher_st EVP_CIPHER;
 typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 typedef struct evp_md_st EVP_MD;

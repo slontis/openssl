@@ -169,11 +169,10 @@ static int chacha20_poly1305_set_ctx_params(void *vctx,
             ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_GET_PARAMETER);
             return 0;
         }
-        if (len == 0 || len > CHACHA20_POLY1305_MAX_IVLEN) {
+        if (len != CHACHA20_POLY1305_MAX_IVLEN) {
             ERR_raise(ERR_LIB_PROV, PROV_R_INVALID_IV_LENGTH);
             return 0;
         }
-        ctx->nonce_len = len;
     }
 
     p = OSSL_PARAM_locate_const(params, OSSL_CIPHER_PARAM_AEAD_TAG);

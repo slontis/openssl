@@ -31,12 +31,14 @@ static OSSL_FUNC_digest_init_fn keccak_init;
 static OSSL_FUNC_digest_init_fn keccak_init_params;
 static OSSL_FUNC_digest_update_fn keccak_update;
 static OSSL_FUNC_digest_final_fn keccak_final;
+static OSSL_FUNC_digest_squeeze_fn shake_squeeze;
 static OSSL_FUNC_digest_freectx_fn keccak_freectx;
 static OSSL_FUNC_digest_dupctx_fn keccak_dupctx;
 static OSSL_FUNC_digest_set_ctx_params_fn shake_set_ctx_params;
 static OSSL_FUNC_digest_settable_ctx_params_fn shake_settable_ctx_params;
 static sha3_absorb_fn generic_sha3_absorb;
 static sha3_final_fn generic_sha3_final;
+static sha3_squeeze_fn generic_sha3_squeeze;
 
 #if defined(OPENSSL_CPUID_OBJ) && defined(__s390__) && defined(KECCAK1600_ASM)
 /*
@@ -117,6 +119,23 @@ static int keccak_final(void *vctx, unsigned char *out, size_t *outl,
     return ret;
 }
 
+static int shake_squeeze(void *vctx, unsigned char *out, size_t *outl,
+                         size_t outsz)
+{
+    int ret = 1;
+    KECCAK1600_CTX *ctx = vctx;
+
+    if (!ossl_prov_is_running())
+        return 0;
+    if (ctx->meth.squeeze == NULL)
+        return 0;
+    if (outsz > 0)
+        ret = ctx->meth.squeeze(out, ctx);
+
+    *outl = ctx->md_size;
+    return ret;
+}
+
 /*-
  * Generic software version of the absorb() and final().
  */
@@ -132,10 +151,23 @@ static int generic_sha3_final(unsigned char *md, void *vctx)
     return ossl_sha3_final(md, (KECCAK1600_CTX *)vctx);
 }
 
+static int generic_sha3_squeeze(unsigned char *md, void *vctx)
+{
+    return ossl_sha3_squeeze(md, (KECCAK1600_CTX *)vctx);
+}
+
 static PROV_SHA3_METHOD sha3_generic_md =
 {
     generic_sha3_absorb,
-    generic_sha3_final
+    generic_sha3_final,
+    NULL
+};
+
+static PROV_SHA3_METHOD shake_generic_md =
+{
+    generic_sha3_absorb,
+    generic_sha3_final,
+    generic_sha3_squeeze
 };
 
 #if defined(S390_SHA3)
@@ -235,6 +267,14 @@ static PROV_SHA3_METHOD kmac_s390x_md =
     s390x_kmac_final
 };
 
+# define SHAKE_SET_MD(uname, typ)                                              \
+    if (S390_SHA3_CAPABLE(uname)) {                                            \
+        ctx->pad = S390X_##uname;                                              \
+        ctx->meth = typ##_s390x_md;                                            \
+    } else {                                                                   \
+        ctx->meth = shake_md;                                                  \
+    }
+
 # define SHA3_SET_MD(uname, typ)                                               \
     if (S390_SHA3_CAPABLE(uname)) {                                            \
         ctx->pad = S390X_##uname;                                              \
@@ -252,6 +292,7 @@ static PROV_SHA3_METHOD kmac_s390x_md =
 #else
 # define SHA3_SET_MD(uname, typ) ctx->meth = sha3_generic_md;
 # define KMAC_SET_MD(bitlen) ctx->meth = sha3_generic_md;
+# define SHAKE_SET_MD(uname, typ) ctx->meth = shake_generic_md;
 #endif /* S390_SHA3 */
 
 #define SHA3_newctx(typ, uname, name, bitlen, pad)                             \
@@ -265,6 +306,20 @@ static void *name##_newctx(void *provctx)                                      \
         return NULL;                                                           \
     ossl_sha3_init(ctx, pad, bitlen);                                          \
     SHA3_SET_MD(uname, typ)                                                    \
+    return ctx;                                                                \
+}
+
+#define SHAKE_newctx(typ, uname, name, bitlen, pad)                            \
+static OSSL_FUNC_digest_newctx_fn name##_newctx;                               \
+static void *name##_newctx(void *provctx)                                      \
+{                                                                              \
+    KECCAK1600_CTX *ctx = ossl_prov_is_running() ? OPENSSL_zalloc(sizeof(*ctx))\
+                                                : NULL;                        \
+                                                                               \
+    if (ctx == NULL)                                                           \
+        return NULL;                                                           \
+    ossl_sha3_init(ctx, pad, bitlen);                                          \
+    SHAKE_SET_MD(uname, typ)                                                   \
     return ctx;                                                                \
 }
 
@@ -299,6 +354,7 @@ const OSSL_DISPATCH ossl_##name##_functions[] = {                              \
 
 #define PROV_FUNC_SHAKE_DIGEST(name, bitlen, blksize, dgstsize, flags)         \
     PROV_FUNC_SHA3_DIGEST_COMMON(name, bitlen, blksize, dgstsize, flags),      \
+    { OSSL_FUNC_DIGEST_SQUEEZE, (void (*)(void))shake_squeeze },               \
     { OSSL_FUNC_DIGEST_INIT, (void (*)(void))keccak_init_params },             \
     { OSSL_FUNC_DIGEST_SET_CTX_PARAMS, (void (*)(void))shake_set_ctx_params }, \
     { OSSL_FUNC_DIGEST_SETTABLE_CTX_PARAMS,                                    \
@@ -364,7 +420,7 @@ static int shake_set_ctx_params(void *vctx, const OSSL_PARAM params[])
                           SHA3_FLAGS)
 
 #define IMPLEMENT_SHAKE_functions(bitlen)                                      \
-    SHA3_newctx(shake, SHAKE_##bitlen, shake_##bitlen, bitlen, '\x1f')         \
+    SHAKE_newctx(shake, SHAKE_##bitlen, shake_##bitlen, bitlen, '\x1f')        \
     PROV_FUNC_SHAKE_DIGEST(shake_##bitlen, bitlen,                             \
                           SHA3_BLOCKSIZE(bitlen), SHA3_MDSIZE(bitlen),         \
                           SHAKE_FLAGS)

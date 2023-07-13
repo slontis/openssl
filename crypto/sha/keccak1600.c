@@ -13,7 +13,7 @@
 
 size_t SHA3_absorb(uint64_t A[5][5], const unsigned char *inp, size_t len,
                    size_t r);
-void SHA3_squeeze(uint64_t A[5][5], unsigned char *out, size_t len, size_t r);
+void SHA3_squeeze(uint64_t A[5][5], unsigned char *out, size_t len, size_t r, int next);
 
 #if !defined(KECCAK1600_ASM) || !defined(SELFTEST)
 
@@ -1093,7 +1093,7 @@ size_t SHA3_absorb(uint64_t A[5][5], const unsigned char *inp, size_t len,
  * sha3_squeeze is called once at the end to generate |out| hash value
  * of |len| bytes.
  */
-void SHA3_squeeze(uint64_t A[5][5], unsigned char *out, size_t len, size_t r)
+void SHA3_squeeze(uint64_t A[5][5], unsigned char *out, size_t len, size_t r, int next)
 {
     uint64_t *A_flat = (uint64_t *)A;
     size_t i, w = r / 8;
@@ -1101,6 +1101,9 @@ void SHA3_squeeze(uint64_t A[5][5], unsigned char *out, size_t len, size_t r)
     assert(r < (25 * sizeof(A[0][0])) && (r % 8) == 0);
 
     while (len != 0) {
+        if (next)
+            KeccakF1600(A);
+        next = 1;
         for (i = 0; i < w && len != 0; i++) {
             uint64_t Ai = BitDeinterleave(A_flat[i]);
 
@@ -1123,8 +1126,6 @@ void SHA3_squeeze(uint64_t A[5][5], unsigned char *out, size_t len, size_t r)
             out += 8;
             len -= 8;
         }
-        if (len)
-            KeccakF1600(A);
     }
 }
 #endif

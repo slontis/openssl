@@ -932,7 +932,7 @@ SHA3_absorb:
 .size	SHA3_absorb,.-SHA3_absorb
 ___
 }
-{ my ($out,$len,$A_flat,$bsz) = map("r$_", (4,5,10,12));
+{ my ($out,$len,$A_flat,$bsz,$next) = map("r$_", (4,5,10,12,11));
 
 $code.=<<___;
 .global	SHA3_squeeze
@@ -966,6 +966,8 @@ SHA3_squeeze:
 	stmdb	sp!,{r6-r9}
 
 	mov	r14,$A_flat
+	cmp	$next, #0
+	bne 	.Lnext_block
 	b	.Loop_squeeze
 
 .align	4
@@ -1037,7 +1039,7 @@ SHA3_squeeze:
 
 	subs	$bsz,$bsz,#8		@ bsz -= 8
 	bhi	.Loop_squeeze
-
+.Lnext_block
 	mov	r0,r14			@ original $A_flat
 
 	bl	KeccakF1600

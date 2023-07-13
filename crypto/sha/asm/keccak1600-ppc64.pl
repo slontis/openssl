@@ -649,7 +649,7 @@ SHA3_absorb:
 .size	SHA3_absorb,.-SHA3_absorb
 ___
 {
-my ($A_flat,$out,$len,$bsz) = map("r$_",(28..31));
+my ($A_flat,$out,$len,$bsz,$next) = map("r$_",(27..31));
 $code.=<<___;
 .globl	SHA3_squeeze
 .type	SHA3_squeeze,\@function
@@ -668,6 +668,8 @@ SHA3_squeeze:
 	subi	$out,r4,1		; prepare for stbu
 	mr	$len,r5
 	mr	$bsz,r6
+	${UCMP}i $next,1
+	blt	.Lnext_block
 	b	.Loop_squeeze
 
 .align	4
@@ -698,6 +700,7 @@ SHA3_squeeze:
 	subic.	r6,r6,8
 	bgt	.Loop_squeeze
 
+.Lnext_block:
 	mr	r3,$A_flat
 	bl	KeccakF1600
 	subi	r3,$A_flat,8		; prepare for ldu

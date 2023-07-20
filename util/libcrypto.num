@@ -5523,3 +5523,4 @@ OSSL_ERR_STATE_new                      ?	3_2_0	EXIST::FUNCTION:
 OSSL_ERR_STATE_save                     ?	3_2_0	EXIST::FUNCTION:
 OSSL_ERR_STATE_restore                  ?	3_2_0	EXIST::FUNCTION:
 OSSL_ERR_STATE_free                     ?	3_2_0	EXIST::FUNCTION:
+EVP_DigestSqueeze                       ?	3_2_0	EXIST::FUNCTION:

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2024-2025 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -205,7 +205,7 @@ err:
     return 1;
 }
 
-static int ml_dsa_key_public_from_private(ML_DSA_KEY *key)
+int ossl_ml_dsa_key_public_from_private(ML_DSA_KEY *key)
 {
     int ret = 0;
     VECTOR t0;
@@ -263,7 +263,7 @@ int ossl_ml_dsa_key_fromdata(ML_DSA_KEY *key, const OSSL_PARAM params[],
                     || !ossl_ml_dsa_sk_decode(key, priv_data, priv_data_len))
                 return 0;
             /* Always generate the public key from the private key */
-            if (!ml_dsa_key_public_from_private(key))
+            if (!ossl_ml_dsa_key_public_from_private(key))
                 return 0;
             /* Error if the supplied public key does not match the generated key */
             if (pub != NULL

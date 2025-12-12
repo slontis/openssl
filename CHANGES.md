@@ -32,6 +32,12 @@ OpenSSL 4.0
 
 ### Changes between 3.6 and 4.0 [xx XXX xxxx]
 
+ * Added LMS support for OpenSSL commandline signature verification using
+   pkeyutl. This required adding LMS 'SubjectPublicKeyInfo' encoder/decoder
+   support and changes to the LMS keymanager and signature code.
+
+   *Shane Lontis*
+
  * Added configure options to disable KDF algorithms for
    hmac-drbg-kdf, kbkdf, krb5kdf, pvkkdf, snmpkdf, sskdf, sshkdf, x942kdf and x963kdf.
 

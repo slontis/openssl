@@ -95,6 +95,8 @@ The OpenSSL default provider supports these operations and algorithms:
 
 =item ChaCha20-Poly1305, see L<EVP_CIPHER-CHACHA(7)>
 
+=item ASCON-AEAD128, see L<EVP_CIPHER-ASCON-AEAD128(7)>
+
 =item NULL, see L<EVP_CIPHER-NULL(7)>
 
 =back
@@ -531,8 +533,8 @@ L<OSSL_PROVIDER-base(7)>
 =head1 HISTORY
 
 The RIPEMD160 digest was added to the default provider in OpenSSL 3.0.7.
-
 The HKDF-SHA256, HKDF-SHA384 and HKDF-SHA512 algorithms were added in OpenSSL 3.6.
+The ASCON-AEAD128 algorithm was added in OpenSSL 4.0.
 
 All other functionality was added in OpenSSL 3.0.
 

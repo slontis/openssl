@@ -624,6 +624,10 @@ Additional information related to ACVP can be found at
 Do not build apps, e.g. the openssl program. This is handy for minimization.
 This option also disables tests.
 
+### no-ascon128
+
+Don't build support for ASCON algorithms.
+
 ### no-asm
 
 Do not use assembler code.

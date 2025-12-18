@@ -393,6 +393,9 @@ static const OSSL_ALGORITHM_CAPABLE fips_ciphers[] = {
     ALG(PROV_NAMES_DES_EDE3_ECB, ossl_tdes_ede3_ecb_functions),
     ALG(PROV_NAMES_DES_EDE3_CBC, ossl_tdes_ede3_cbc_functions),
 #endif  /* OPENSSL_NO_DES */
+#ifndef OPENSSL_NO_ASCON128
+    ALG(PROV_NAMES_ASCON_AEAD128, ossl_ascon_aead128_functions),
+#endif
     { { NULL, NULL, NULL }, NULL }
 };
 static OSSL_ALGORITHM exported_fips_ciphers[OSSL_NELEM(fips_ciphers)];

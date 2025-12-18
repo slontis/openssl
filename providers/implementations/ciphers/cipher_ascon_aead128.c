@@ -620,12 +620,6 @@ static int ascon_aead128_cipher(void *vctx, unsigned char *out, size_t *outl,
     return 0;
 }
 
-/*********************************************************************
- *
- *  Setup
- *
- *****/
-
 typedef void (*funcptr_t)(void);
 
 /* The dispatch table for ASCON-AEAD128 */

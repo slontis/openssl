@@ -83,6 +83,8 @@ KECCAK-KMAC is only used internally as a sub algorithm of KMAC.
 
 =item 3DES, see L<EVP_CIPHER-DES(7)>
 
+=item ASCON-AEAD128, see L<EVP_CIPHER-ASCON-AEAD128(7)>
+
 =back
 
 =head2 Message Authentication Code (MAC)
@@ -601,6 +603,7 @@ L<https://www.openssl.org/source/>
 =head1 HISTORY
 
 The HKDF-SHA256, HKDF-SHA384 and HKDF-SHA512 algorithms were added in OpenSSL 3.6.
+The ASCON-AEAD128 algorithm was added in OpenSSL 4.0.
 
 All other functionality was added in OpenSSL 3.0.
 

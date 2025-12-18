@@ -127,6 +127,7 @@ def format_output(vectors):
         ciphertext_hex = bytes_to_hex(ciphertext_bytes)
         
         # Format output
+        output_lines.append("FIPSversion = >=4.0.0")
         output_lines.append("Cipher = ascon-aead128")
         output_lines.append(f"Key = {key}")
         output_lines.append(f"IV = {nonce}")

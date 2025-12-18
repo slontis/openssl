@@ -11,13 +11,13 @@ using the B<EVP_CIPHER> API
 
 =head2 Algorithm Names
 
-The following algorithms are available in the default provider:
+
+The following algorithm is available in the FIPS provider as well as the
+default provider:
 
 =over 4
 
 =item "ASCON-AEAD128"
-
-=item "ascon-aead128"
 
 =back
 
@@ -53,7 +53,7 @@ L<provider-cipher(7)>, L<OSSL_PROVIDER-default(7)>
 
 =head1 HISTORY
 
-Ascon-AEAD128 was added in OpenSSL 4.X
+ASCON-AEAD128 was added in OpenSSL 4.0
 
 This implementation conforms to the NIST SP 800-232 specification for
 Ascon-AEAD128, which defines the authenticated encryption scheme using the

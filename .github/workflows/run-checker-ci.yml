@@ -29,6 +29,7 @@ jobs:
           no-ecx,
           no-ml-dsa,
           no-ml-kem,
+          no-ascon128,
           no-http,
           no-legacy,
           no-sock,

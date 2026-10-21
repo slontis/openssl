@@ -1,0 +1,47 @@
+gpo() {
+    local bra=`git rev-parse --abbrev-ref HEAD`
+    echo "Switching from branch: $bra"
+    git checkout master
+    git pull openssl-master master
+    git push
+    git checkout "$bra"
+}
+
+# fetch from a users branch
+function fub() {
+    if [ -z "$2" ]; then
+        echo "Usage: fub username branchname"
+        return
+    fi
+    local user=$1
+    local branch=$2
+    git fetch git@github.com:"$user"/openssl.git "$branch":shanes-"$branch"
+    git checkout shanes-"$branch"
+}
+
+# push to a users branch
+function pub() {
+    if [ -z "$2" ]; then
+        echo "Usage: pub username branchname"
+        return
+    fi
+    local user=$1
+    local branch=$2
+    git push git@github.com:"$user"/openssl.git shanes-"$branch":"$branch"
+}
+
+function cbytes() {
+    local sz=16
+    if [ -z "$1" ]; then
+        echo "Usage: cbyte bin_file [cols]"
+        return
+    fi
+    if [ -n "$2" ]; then
+        sz=$2
+    fi
+    echo ""
+    echo "static const unsigned char table[] = {"
+    hexdump -v -e "$sz"'/1 "0x%02x, " "\n"' "$1"
+    echo "};"
+}
+

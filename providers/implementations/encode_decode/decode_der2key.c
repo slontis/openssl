@@ -1372,3 +1372,5 @@ MAKE_DECODER("ML-DSA-87", ml_dsa_87, ml_dsa_87, SubjectPublicKeyInfo);
 #ifndef OPENSSL_NO_LMS
 MAKE_DECODER("LMS", lms, lms, SubjectPublicKeyInfo);
 #endif
+
+#include "fn_dsa_decoder.inc"

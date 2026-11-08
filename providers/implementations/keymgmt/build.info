@@ -69,3 +69,7 @@ ENDIF
 IF[{- !$disabled{'slh-dsa'} -}]
   SOURCE[$SLH_DSA_GOAL]=slh_dsa_kmgmt.c
 ENDIF
+
+IF[{- !$disabled{"fn-dsa"} -}]
+  SOURCE[../../libdefault.a]=fn_dsa_kmgmt.c
+ENDIF

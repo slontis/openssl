@@ -757,8 +757,70 @@ end:
 }
 #endif
 
+/* FN-DSA object recognition also runs when the implementation is disabled. */
+static const struct {
+    int nid;
+    int evp_type;
+    const char *short_name;
+    const char *long_name;
+    const char *oid;
+    unsigned char der[11];
+} fn_dsa_objects[] = {
+    { NID_FN_DSA_512, EVP_PKEY_FN_DSA_512, "id-alg-fndsa512", "FN-DSA-512",
+        "2.16.840.1.101.3.4.3.50",
+        { 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x32 } },
+    { NID_FN_DSA_1024, EVP_PKEY_FN_DSA_1024, "id-alg-fndsa1024", "FN-DSA-1024",
+        "2.16.840.1.101.3.4.3.51",
+        { 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x33 } }
+};
+
+static int test_fn_dsa_object(int idx)
+{
+    ASN1_OBJECT *obj = NULL, *decoded = NULL;
+    unsigned char *der = NULL;
+    const unsigned char *p = fn_dsa_objects[idx].der;
+    char text[80];
+    int len, digest = -1, key = -1, signature = -1, ok = 0;
+
+    if (!TEST_int_eq(fn_dsa_objects[idx].evp_type, fn_dsa_objects[idx].nid)
+        || !TEST_str_eq(OBJ_nid2sn(fn_dsa_objects[idx].nid), fn_dsa_objects[idx].short_name)
+        || !TEST_str_eq(OBJ_nid2ln(fn_dsa_objects[idx].nid), fn_dsa_objects[idx].long_name)
+        || !TEST_int_eq(OBJ_sn2nid(fn_dsa_objects[idx].short_name), fn_dsa_objects[idx].nid)
+        || !TEST_int_eq(OBJ_ln2nid(fn_dsa_objects[idx].long_name), fn_dsa_objects[idx].nid)
+        || !TEST_int_eq(OBJ_txt2nid(fn_dsa_objects[idx].short_name), fn_dsa_objects[idx].nid)
+        || !TEST_int_eq(OBJ_txt2nid(fn_dsa_objects[idx].long_name), fn_dsa_objects[idx].nid)
+        || !TEST_int_eq(OBJ_txt2nid(fn_dsa_objects[idx].oid), fn_dsa_objects[idx].nid)
+        || !TEST_ptr(obj = OBJ_txt2obj(fn_dsa_objects[idx].oid, 1))
+        || !TEST_int_eq(OBJ_obj2nid(obj), fn_dsa_objects[idx].nid)
+        || !TEST_int_eq(OBJ_cmp(obj, OBJ_nid2obj(fn_dsa_objects[idx].nid)), 0))
+        goto end;
+    if (!TEST_int_gt(OBJ_obj2txt(text, sizeof(text), obj, 1), 0)
+        || !TEST_str_eq(text, fn_dsa_objects[idx].oid)
+        || !TEST_int_gt(len = i2d_ASN1_OBJECT(obj, &der), 0)
+        || !TEST_mem_eq(der, len, fn_dsa_objects[idx].der, sizeof(fn_dsa_objects[idx].der))
+        || !TEST_ptr(decoded = d2i_ASN1_OBJECT(NULL, &p, sizeof(fn_dsa_objects[idx].der)))
+        || !TEST_ptr_eq(p, fn_dsa_objects[idx].der + sizeof(fn_dsa_objects[idx].der))
+        || !TEST_int_eq(OBJ_obj2nid(decoded), fn_dsa_objects[idx].nid))
+        goto end;
+    if (!TEST_true(OBJ_find_sigid_algs(fn_dsa_objects[idx].nid, &digest, &key))
+        || !TEST_int_eq(digest, NID_undef)
+        || !TEST_int_eq(key, fn_dsa_objects[idx].nid))
+        goto end;
+    /* Like ML-DSA, an undefined digest is excluded from the reverse table. */
+    if (!TEST_false(OBJ_find_sigid_by_algs(&signature, NID_undef, fn_dsa_objects[idx].nid)))
+        goto end;
+    ok = 1;
+end:
+    ASN1_OBJECT_free(obj);
+    ASN1_OBJECT_free(decoded);
+    OPENSSL_free(der);
+    return ok;
+}
+
+
 int setup_tests(void)
 {
+    ADD_ALL_TESTS(test_fn_dsa_object, OSSL_NELEM(fn_dsa_objects));
     ADD_TEST(test_tbl_standard);
     ADD_TEST(test_standard_methods);
     ADD_TEST(test_empty_nonoptional_content);

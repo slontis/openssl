@@ -25,6 +25,8 @@ RSA_SHA3_512		sha3_512 rsaEncryption
 rsassaPss		undef	rsassaPss
 ED25519		    undef	ED25519
 ED448		    undef	ED448
+FN_DSA_512  undef FN_DSA_512
+FN_DSA_1024 undef FN_DSA_1024
 ML_DSA_44  undef ML_DSA_44
 ML_DSA_65  undef ML_DSA_65
 ML_DSA_87  undef ML_DSA_87

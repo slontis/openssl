@@ -147,3 +147,5 @@ INCLUDE[init.o]=.
 IF[{- $target{needs_c99_snprintf_compat} -}]
   SOURCE[../libcrypto]=msvc2013_snprintf.c
 ENDIF
+
+SUBDIRS=fn_dsa

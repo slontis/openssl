@@ -34,3 +34,7 @@ ENDIF
 IF[{- !$disabled{'ml-dsa'} || !$disabled{'ml-kem'} -}]
   SOURCE[$DECODER_GOAL]=ml_common_codecs.c
 ENDIF
+
+IF[{- !$disabled{"fn-dsa"} -}]
+  SOURCE[$DECODER_GOAL]=fn_dsa_codecs.c
+ENDIF

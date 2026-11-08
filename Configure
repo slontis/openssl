@@ -492,6 +492,7 @@ my @disablables_algorithms = (
     "scrypt",
     "seed",
     "siphash",
+    "fn-dsa",
     "slh-dsa",
     "siv",
     "snmpkdf",
@@ -509,6 +510,7 @@ my @disablables_algorithms = (
 );
 
 my @disablables_features = (
+    "fn-dsa-test-entropy",
     "acvp-tests",
     "apps",
     "asan",
@@ -624,6 +626,7 @@ my %deprecated_disablables = (
 
 our %disabled = ( # "what"         => "comment"
                   "atexit"              => "default",
+                  "fn-dsa-test-entropy" => "default",
                   "fips"                => "default",
                   "fips-jitter"         => "default",
                   "asan"                => "default",
@@ -729,6 +732,8 @@ my @disable_cascades = (
     "stdio"             => [ "apps", "egd" ],
     "apps"              => [ "tests" ],
     "tests"             => [ "external-tests", "unit-tests" ],
+    "fn-dsa"            => [ "fn-dsa-test-entropy" ],
+    "tests"             => [ "fn-dsa-test-entropy" ],
     "comp"              => [ "zlib", "brotli", "zstd" ],
     "sm3"               => [ "sm2" ],
     sub { !$disabled{"unit-test"} } => [ "heartbeats" ],

@@ -229,6 +229,10 @@ The OpenSSL default provider supports these operations and algorithms:
 
 =item LMS, see L<EVP_SIGNATURE-LMS(7)>
 
+=item FN-DSA-512, see L<EVP_SIGNATURE-FN-DSA(7)>
+
+=item FN-DSA-1024, see L<EVP_SIGNATURE-FN-DSA(7)>
+
 =item ML-DSA-44, see L<EVP_SIGNATURE-ML-DSA(7)>
 
 =item ML-DSA-65, see L<EVP_SIGNATURE-ML-DSA(7)>
@@ -324,6 +328,10 @@ The OpenSSL default provider supports these operations and algorithms:
 =item X25519, see L<EVP_KEYMGMT-X25519(7)>
 
 =item X448, see L<EVP_KEYMGMT-X448(7)>
+
+=item FN-DSA-512, see L<EVP_PKEY-FN-DSA(7)>
+
+=item FN-DSA-1024, see L<EVP_PKEY-FN-DSA(7)>
 
 =item ML-DSA-44, see L<EVP_KEYMGMT-ML-DSA(7)>
 
@@ -438,6 +446,10 @@ are also available in the base provider.
 
 =item SM2
 
+=item FN-DSA-512, see L<EVP_PKEY-FN-DSA(7)>
+
+=item FN-DSA-1024, see L<EVP_PKEY-FN-DSA(7)>
+
 =item ML-DSA-44
 
 =item ML-DSA-65
@@ -509,6 +521,10 @@ combination with the FIPS provider.
 =item X448
 
 =item SM2
+
+=item FN-DSA-512, see L<EVP_PKEY-FN-DSA(7)>
+
+=item FN-DSA-1024, see L<EVP_PKEY-FN-DSA(7)>
 
 =item ML-DSA-44
 

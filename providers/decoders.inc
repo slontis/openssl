@@ -151,3 +151,10 @@ DECODER("DER", pem, der, yes, "PEMtoDER"),
  * unencrypted PrivateKeyInfo in DER form to the identified algorithm.
  */
 DECODER_w_structure("DER", der, EncryptedPrivateKeyInfo, der, yes, "EPKItoDER"),
+
+#ifndef OPENSSL_NO_FN_DSA
+DECODER_w_structure("FN-DSA-512", der, PrivateKeyInfo, fn_dsa_512, yes, "PKItoFN-DSA-512-DER"),
+DECODER_w_structure("FN-DSA-512", der, SubjectPublicKeyInfo, fn_dsa_512, yes, "SPKItoFN-DSA-512-DER"),
+DECODER_w_structure("FN-DSA-1024", der, PrivateKeyInfo, fn_dsa_1024, yes, "PKItoFN-DSA-1024-DER"),
+DECODER_w_structure("FN-DSA-1024", der, SubjectPublicKeyInfo, fn_dsa_1024, yes, "SPKItoFN-DSA-1024-DER"),
+#endif

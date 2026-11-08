@@ -498,6 +498,10 @@ static const OSSL_ALGORITHM deflt_signature[] = {
     { PROV_NAMES_SM2, "provider=default", ossl_sm2_signature_functions },
 #endif
 #endif
+#ifndef OPENSSL_NO_FN_DSA
+    { PROV_NAMES_FN_DSA_512, "provider=default", ossl_fn_dsa_512_signature_functions },
+    { PROV_NAMES_FN_DSA_1024, "provider=default", ossl_fn_dsa_1024_signature_functions },
+#endif
 #ifndef OPENSSL_NO_ML_DSA
     { PROV_NAMES_ML_DSA_44, "provider=default", ossl_ml_dsa_44_signature_functions },
     { PROV_NAMES_ML_DSA_65, "provider=default", ossl_ml_dsa_65_signature_functions },
@@ -613,6 +617,12 @@ static const OSSL_ALGORITHM deflt_keymgmt[] = {
     { PROV_NAMES_ED448, "provider=default", ossl_ed448_keymgmt_functions,
         PROV_DESCS_ED448 },
 #endif
+#endif
+#ifndef OPENSSL_NO_FN_DSA
+    { PROV_NAMES_FN_DSA_512, "provider=default", ossl_fn_dsa_512_keymgmt_functions,
+        PROV_DESCS_FN_DSA_512 },
+    { PROV_NAMES_FN_DSA_1024, "provider=default", ossl_fn_dsa_1024_keymgmt_functions,
+        PROV_DESCS_FN_DSA_1024 },
 #endif
 #ifndef OPENSSL_NO_ML_DSA
     { PROV_NAMES_ML_DSA_44, "provider=default", ossl_ml_dsa_44_keymgmt_functions,

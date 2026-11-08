@@ -470,6 +470,9 @@ my %params = (
     'OSSL_PKEY_PARAM_FIPS_SIGN_CHECK' =>            "sign-check",
     'OSSL_PKEY_PARAM_FIPS_APPROVED_INDICATOR' => '*OSSL_ALG_PARAM_FIPS_APPROVED_INDICATOR',
 
+# FN_DSA Key generation parameter
+    'OSSL_PKEY_PARAM_FN_DSA_SEED' =>             "seed",
+
 # ML_DSA Key generation parameter
     'OSSL_PKEY_PARAM_ML_DSA_SEED' =>             "seed",
     'OSSL_PKEY_PARAM_ML_DSA_RETAIN_SEED' =>      "ml-dsa.retain_seed",

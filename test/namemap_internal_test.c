@@ -191,8 +191,54 @@ err:
     return ret;
 }
 
+#include "../providers/implementations/include/prov/names.h"
+
+static const struct {
+    const char *short_name;
+    const char *long_name;
+    const char *oid;
+    const char *compact_name;
+    const char *provider_names;
+} fn_dsa_names[] = {
+    { "id-alg-fndsa512", "FN-DSA-512",
+        "2.16.840.1.101.3.4.3.50", "FNDSA512", PROV_NAMES_FN_DSA_512 },
+    { "id-alg-fndsa1024", "FN-DSA-1024",
+        "2.16.840.1.101.3.4.3.51", "FNDSA1024", PROV_NAMES_FN_DSA_1024 }
+};
+
+static int test_fn_dsa_provider_names(int idx)
+{
+    OSSL_NAMEMAP *names = NULL;
+    char expected[160];
+    int ids[2], ok = 0;
+
+    /* Provider-only compact aliases need not be separate ASN.1 objects. */
+    snprintf(expected, sizeof(expected), "%s:%s:%s:%s",
+        fn_dsa_names[idx].long_name, fn_dsa_names[idx].compact_name,
+        fn_dsa_names[idx].oid, fn_dsa_names[idx].short_name);
+    if (!TEST_str_eq(fn_dsa_names[idx].provider_names, expected)
+        || !TEST_ptr(names = ossl_namemap_new(NULL))
+        || !TEST_int_gt(ids[0] = ossl_namemap_add_names(names, 0,
+                            fn_dsa_names[0].provider_names, ':'), 0)
+        || !TEST_int_gt(ids[1] = ossl_namemap_add_names(names, 0,
+                            fn_dsa_names[1].provider_names, ':'), 0)
+        || !TEST_int_ne(ids[0], ids[1]))
+        goto end;
+    ok = TEST_int_eq(ossl_namemap_name2num(names, fn_dsa_names[idx].long_name), ids[idx])
+        && TEST_int_eq(ossl_namemap_name2num(names, fn_dsa_names[idx].short_name), ids[idx])
+        && TEST_int_eq(ossl_namemap_name2num(names, fn_dsa_names[idx].oid), ids[idx])
+        && TEST_int_eq(ossl_namemap_name2num(names, fn_dsa_names[idx].compact_name), ids[idx])
+        && TEST_int_eq(ossl_namemap_name2num(names,
+                           idx == 0 ? "fn-dsa-512" : "fn-dsa-1024"), ids[idx]);
+end:
+    ossl_namemap_free(names);
+    return ok;
+}
+
+
 int setup_tests(void)
 {
+    ADD_ALL_TESTS(test_fn_dsa_provider_names, 2);
     ADD_TEST(test_namemap_empty);
     ADD_TEST(test_namemap_independent);
     ADD_TEST(test_namemap_stored);

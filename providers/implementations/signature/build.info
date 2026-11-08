@@ -48,3 +48,7 @@ ENDIF
 IF[{- !$disabled{'slh-dsa'} -}]
   SOURCE[$DSA_GOAL]=slh_dsa_sig.c
 ENDIF
+
+IF[{- !$disabled{"fn-dsa"} -}]
+  SOURCE[../../libdefault.a]=fn_dsa_sig.c
+ENDIF

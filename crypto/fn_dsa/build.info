@@ -1,0 +1,4 @@
+LIBS=../../libcrypto
+IF[{- !$disabled{"fn-dsa"} -}]
+  SOURCE[../../libcrypto]=fn_dsa_core.c fn_dsa_keygen.c fn_dsa_key.c
+ENDIF

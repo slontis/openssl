@@ -1782,3 +1782,5 @@ MAKE_ENCODER(ml_dsa_87, ml_dsa, SubjectPublicKeyInfo, pem);
 MAKE_ENCODER(lms, lms, SubjectPublicKeyInfo, der);
 MAKE_ENCODER(lms, lms, SubjectPublicKeyInfo, pem);
 #endif
+
+#include "fn_dsa_encoder.inc"

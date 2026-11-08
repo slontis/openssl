@@ -1,0 +1,184 @@
+=pod
+
+=encoding utf-8
+
+=head1 NAME
+
+EVP_SIGNATURE-FN-DSA, EVP_SIGNATURE-FN-DSA-512, EVP_SIGNATURE-FN-DSA-1024
+- EVP_PKEY FN-DSA fixed-point signature implementations
+
+=head1 DESCRIPTION
+
+The default provider supplies B<FN-DSA-512> and B<FN-DSA-1024> signature
+implementations backed by the supplied paper's 64.64 fixed-point Gaussian
+sampler. The associated key types are described in L<EVP_PKEY-FN-DSA(7)>.
+They are omitted when configured with B<no-fn-dsa>.
+
+This development signing profile combines the fixed-point paper's sampler and
+compressed signatures with ML-DSA's pure message framing. It is not a validated
+FIPS 206 profile. Message processing and validation vectors must be aligned
+with the eventual normative FN-DSA specification before conformance is claimed.
+No FIPS provider implementation or approval indicator is provided.
+
+Use L<EVP_SIGNATURE_fetch(3)> with either algorithm name, its compact alias
+B<FNDSA512> or B<FNDSA1024>, its ASN.1 short name, or its numeric identifier.
+Names and provisional numeric values are listed in L<EVP_PKEY-FN-DSA(7)>.
+
+The implementations support L<EVP_PKEY_sign_message_init(3)>,
+L<EVP_PKEY_sign(3)>, L<EVP_PKEY_verify_message_init(3)>, and
+L<EVP_PKEY_verify(3)> for one-shot messages. They also support
+L<EVP_DigestSignInit_ex(3)> and L<EVP_DigestVerifyInit_ex(3)> with a NULL
+external digest name, for both one-shot and update/final operations.
+The EVP message update/final interfaces are supported as well.
+An explicitly selected external digest is rejected.
+
+Signatures always use fresh randomness in a normal build. A test-only entropy
+override is available only with the explicit configuration option described below.
+There is no supported C<deterministic> signing parameter, including in test builds.
+The current compressed signature has a variable length, bounded by 690 bytes
+for B<FN-DSA-512> and 1330 bytes for B<FN-DSA-1024>.
+Query the required buffer size by passing a NULL signature buffer.
+A size query does not generate a signature or consume the accumulated message.
+
+=head2 Signature parameters
+
+=over 4
+
+=item "algorithm-id" (B<OSSL_SIGNATURE_PARAM_ALGORITHM_ID>) <octet string>
+
+A gettable DER AlgorithmIdentifier containing the selected algorithm's
+registered object identifier and absent parameters.
+The provisional identifier assignment is described in L<EVP_PKEY-FN-DSA(7)>.
+
+=item "digest" (B<OSSL_SIGNATURE_PARAM_DIGEST>) <UTF8 string>
+
+Only the empty string is accepted. Hashing is internal to this signing profile.
+
+=item "context-string" (B<OSSL_SIGNATURE_PARAM_CONTEXT_STRING>) <octet string>
+
+An optional application context containing at most 255 bytes, including any
+zero bytes. The default is empty. Both signing and verification frame the
+message exactly as pure ML-DSA:
+
+    0x00 || one-byte context length || context || message
+
+Thus an empty context still adds two zero bytes before the message.
+The context must be set before the first update call. Changing it after an
+update or final call fails. It is copied when a context is duplicated, and is
+retained across reinitialization unless explicitly replaced. An empty octet
+string resets it to empty. Prehash modes and raw message-encoding overrides
+are unsupported.
+
+=item "test-entropy" (B<OSSL_SIGNATURE_PARAM_TEST_ENTROPY>) <octet string>
+
+Available only when configured with B<enable-fn-dsa-test-entropy>, which is
+B<disabled by default>. Normal builds neither advertise nor accept this
+parameter. It is signing-only and must be set before the first update call.
+Verification rejects it in all builds.
+
+This test-only input contains exactly 88 bytes: a 40-byte public nonce followed
+by a 48-byte private sampler seed. Its length follows this backend's random
+inputs, rather than ML-DSA's 32-byte entropy input. Other lengths and types fail.
+It allows reproducible signatures for test keys, including comparisons between
+one-shot and update/final calls. It is not a deterministic production signing
+mode and must not be used with production private keys. Reusing controlled
+nonces and sampling streams can compromise security.
+
+The override is retained across reinitialization and duplication. Create a new
+signature context to discard it and return to ordinary randomized signing.
+Signature size queries do not consume randomness. The configuration option is
+unavailable with B<no-fn-dsa> or B<no-tests>.
+
+=item "signature" (B<OSSL_SIGNATURE_PARAM_SIGNATURE>) <octet string>
+
+The signature to verify with the message update/final interface.
+Set it during L<EVP_PKEY_verify_message_init(3)> or with
+L<EVP_PKEY_CTX_set_params(3)> before the verification final call.
+It is not settable on a signing context.
+
+=back
+
+=head2 Fixed-point arithmetic and buffering
+
+The signing FFT and Gaussian sampler use signed 64.64 fixed-point values stored
+in 128-bit integers, following the Type 1 construction in
+L<Toward a Secure Fixed-Point Implementation of the Falcon Signature Scheme|https://eprint.iacr.org/2026/1531>.
+Key generation uses 32.32 fixed-point arithmetic with exact integer NTRU
+operations. There is no floating-point arithmetic or rounding-mode dependency.
+
+The backend hashes the public nonce before the framed message. Since verification
+obtains that nonce from the final signature, update/final operations buffer the
+message. Memory use is proportional to the accumulated message size.
+Buffered messages are cleared on reinitialization and cleanup.
+Duplicated contexts own independent copies of their buffered data.
+
+=head2 Security considerations
+
+The published NIST position for FN-DSA permits randomized signing, not
+deterministic signing; see the
+L<NIST PQC statement|https://groups.google.com/a/list.nist.gov/g/pqc-forum/c/CsWPP35LJWw/m/7pOF01tIAgAJ>.
+Unlike ML-DSA, copying its deterministic production mode is therefore
+inappropriate. B<enable-fn-dsa-test-entropy> is solely a test-build facility and
+must not be enabled in production. A failure to obtain signing randomness
+fails the operation; there is no deterministic fallback.
+
+Functional tests cover fixed-point arithmetic, seed regeneration, the sampler's
+signing path, and EVP sign/verify operations. Limited compiler-output inspection
+does not constitute a complete constant-time audit or a proof of sampler
+precision. Rejection loops remain variable-time and require a full side-channel
+assessment. No FIPS 206 validation is claimed.
+
+=head1 EXAMPLES
+
+Sign a message using an existing FN-DSA key:
+
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    unsigned char *signature = NULL;
+    size_t signature_len = 0;
+
+    if (ctx != NULL
+        && EVP_DigestSignInit_ex(ctx, NULL, NULL, NULL, NULL, key, NULL) > 0
+        && EVP_DigestSign(ctx, NULL, &signature_len, message, message_len) > 0
+        && (signature = OPENSSL_malloc(signature_len)) != NULL
+        && EVP_DigestSign(ctx, signature, &signature_len,
+                         message, message_len) > 0) {
+        /* Use signature[0..signature_len). */
+    }
+    OPENSSL_free(signature);
+    EVP_MD_CTX_free(ctx);
+
+Verify a signature using a public or private FN-DSA key:
+
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    int valid = 0;
+
+    if (ctx != NULL
+        && EVP_DigestVerifyInit_ex(ctx, NULL, NULL, NULL, NULL, key, NULL) > 0)
+        valid = EVP_DigestVerify(ctx, signature, signature_len,
+                                message, message_len);
+    EVP_MD_CTX_free(ctx);
+    /* valid == 1 means successful verification; other results indicate failure. */
+
+=head1 SEE ALSO
+
+L<EVP_PKEY-FN-DSA(7)>,
+L<EVP_SIGNATURE_fetch(3)>,
+L<EVP_PKEY_sign(3)>,
+L<EVP_PKEY_verify(3)>,
+L<provider-signature(7)>,
+L<EVP_SIGNATURE-ML-DSA(7)>
+
+=head1 HISTORY
+
+This development functionality targets OpenSSL 4.2.
+
+=head1 COPYRIGHT
+
+Copyright 2026 The OpenSSL Project Authors. All Rights Reserved.
+
+Licensed under the Apache License 2.0 (the "License"). You may not use
+this file except in compliance with the License. You can obtain a copy
+in the file LICENSE in the source distribution or at
+L<https://www.openssl.org/source/license.html>.
+
+=cut

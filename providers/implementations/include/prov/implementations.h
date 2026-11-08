@@ -894,4 +894,35 @@ extern const OSSL_DISPATCH ossl_SubjectPublicKeyInfo_der_to_ml_dsa_87_decoder_fu
 extern const OSSL_DISPATCH ossl_generic_skeymgmt_functions[];
 extern const OSSL_DISPATCH ossl_aes_skeymgmt_functions[];
 
+#ifndef OPENSSL_NO_FN_DSA
+extern const OSSL_DISPATCH ossl_fn_dsa_512_keymgmt_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_EncryptedPrivateKeyInfo_der_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_EncryptedPrivateKeyInfo_pem_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_PrivateKeyInfo_der_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_PrivateKeyInfo_pem_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_SubjectPublicKeyInfo_der_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_SubjectPublicKeyInfo_pem_encoder_functions[];
+extern const OSSL_DISPATCH ossl_PrivateKeyInfo_der_to_fn_dsa_512_decoder_functions[];
+extern const OSSL_DISPATCH ossl_SubjectPublicKeyInfo_der_to_fn_dsa_512_decoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_keymgmt_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_EncryptedPrivateKeyInfo_der_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_EncryptedPrivateKeyInfo_pem_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_PrivateKeyInfo_der_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_PrivateKeyInfo_pem_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_SubjectPublicKeyInfo_der_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_SubjectPublicKeyInfo_pem_encoder_functions[];
+extern const OSSL_DISPATCH ossl_PrivateKeyInfo_der_to_fn_dsa_1024_decoder_functions[];
+extern const OSSL_DISPATCH ossl_SubjectPublicKeyInfo_der_to_fn_dsa_1024_decoder_functions[];
+#endif
+
+#ifndef OPENSSL_NO_FN_DSA
+extern const OSSL_DISPATCH ossl_fn_dsa_512_signature_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_signature_functions[];
+#endif
+
+#ifndef OPENSSL_NO_FN_DSA
+extern const OSSL_DISPATCH ossl_fn_dsa_512_to_text_encoder_functions[];
+extern const OSSL_DISPATCH ossl_fn_dsa_1024_to_text_encoder_functions[];
+#endif
+
 #endif /* !defined(OSSL_PROVIDERS_IMPLEMENTATIONS_INCLUDE_PROV_IMPLEMENTATIONS_H) */

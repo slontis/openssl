@@ -72,6 +72,10 @@ ENCODER_TEXT("ML-KEM-512", ml_kem_512, yes),
 ENCODER_TEXT("ML-KEM-768", ml_kem_768, yes),
 ENCODER_TEXT("ML-KEM-1024", ml_kem_1024, yes),
 #endif
+#ifndef OPENSSL_NO_FN_DSA
+ENCODER_TEXT("FN-DSA-512", fn_dsa_512, yes),
+ENCODER_TEXT("FN-DSA-1024", fn_dsa_1024, yes),
+#endif
 #ifndef OPENSSL_NO_ML_DSA
 ENCODER_TEXT("ML-DSA-44", ml_dsa_44, yes),
 ENCODER_TEXT("ML-DSA-65", ml_dsa_65, yes),
@@ -430,3 +434,18 @@ ENCODER_w_structure("EC", ec, yes, pem, X9_62),
 ENCODER_w_structure("LMS", lms, yes, der, SubjectPublicKeyInfo),
 ENCODER_w_structure("LMS", lms, yes, pem, SubjectPublicKeyInfo),
 #endif /* OPENSSL_NO_LMS */
+
+#ifndef OPENSSL_NO_FN_DSA
+ENCODER_w_structure("FN-DSA-512", fn_dsa_512, yes, der, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-512", fn_dsa_512, yes, pem, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-512", fn_dsa_512, yes, der, PrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-512", fn_dsa_512, yes, pem, PrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-512", fn_dsa_512, yes, der, SubjectPublicKeyInfo),
+ENCODER_w_structure("FN-DSA-512", fn_dsa_512, yes, pem, SubjectPublicKeyInfo),
+ENCODER_w_structure("FN-DSA-1024", fn_dsa_1024, yes, der, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-1024", fn_dsa_1024, yes, pem, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-1024", fn_dsa_1024, yes, der, PrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-1024", fn_dsa_1024, yes, pem, PrivateKeyInfo),
+ENCODER_w_structure("FN-DSA-1024", fn_dsa_1024, yes, der, SubjectPublicKeyInfo),
+ENCODER_w_structure("FN-DSA-1024", fn_dsa_1024, yes, pem, SubjectPublicKeyInfo),
+#endif

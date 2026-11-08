@@ -1165,6 +1165,10 @@ sigAlgs 44      : id-hash-slh-dsa-shake-192f-with-shake256 : SLH-DSA-SHAKE-192f-
 sigAlgs 45      : id-hash-slh-dsa-shake-256s-with-shake256 : SLH-DSA-SHAKE-256s-WITH-SHAKE256
 sigAlgs 46      : id-hash-slh-dsa-shake-256f-with-shake256 : SLH-DSA-SHAKE-256f-WITH-SHAKE256
 
+# Provisional user-selected FN-DSA profile; assignment verification outstanding.
+sigAlgs 50      : id-alg-fndsa512  : FN-DSA-512
+sigAlgs 51      : id-alg-fndsa1024 : FN-DSA-1024
+
 # Hold instruction CRL entry extension
 !Cname hold-instruction-code
 id-ce 23		: holdInstructionCode	: Hold Instruction Code

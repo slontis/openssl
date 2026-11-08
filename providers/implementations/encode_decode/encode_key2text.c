@@ -31,6 +31,7 @@
 #include "prov/implementations.h"
 #include "internal/encoder.h"
 #include "prov/endecoder_local.h"
+#include "prov/fn_dsa_codecs.h"
 #include "prov/ml_dsa_codecs.h"
 #include "prov/ml_kem_codecs.h"
 #include "prov/lms_codecs.h"
@@ -616,6 +617,13 @@ err:
 
 /* ---------------------------------------------------------------------- */
 
+#ifndef OPENSSL_NO_FN_DSA
+static int fn_dsa_to_text(BIO *out, const void *key, int selection)
+{
+    return ossl_fn_dsa_key_to_text(out, (const FN_DSA_KEY *)key, selection);
+}
+#endif
+
 #ifndef OPENSSL_NO_ML_DSA
 static int ml_dsa_to_text(BIO *out, const void *key, int selection)
 {
@@ -731,6 +739,11 @@ MAKE_TEXT_ENCODER(ml_kem_1024, ml_kem);
 #endif
 MAKE_TEXT_ENCODER(rsa, rsa);
 MAKE_TEXT_ENCODER(rsapss, rsa);
+
+#ifndef OPENSSL_NO_FN_DSA
+MAKE_TEXT_ENCODER(fn_dsa_512, fn_dsa);
+MAKE_TEXT_ENCODER(fn_dsa_1024, fn_dsa);
+#endif
 
 #ifndef OPENSSL_NO_ML_DSA
 MAKE_TEXT_ENCODER(ml_dsa_44, ml_dsa);

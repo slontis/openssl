@@ -1585,3 +1585,14 @@ _____
 _____
    }
 -}
+
+IF[{- !$disabled{tests} && !$disabled{"fn-dsa"} -}]
+  PROGRAMS{noinst}=fn_dsa_test fn_dsa_internal_test
+  SOURCE[fn_dsa_test]=fn_dsa_test.c
+  INCLUDE[fn_dsa_test]=../include ../apps/include ../crypto/fn_dsa ../providers/implementations/include ../providers/common/include
+  DEPEND[fn_dsa_test]=../libcrypto.a libtestutil.a
+  SOURCE[fn_dsa_internal_test]=fn_dsa_internal_test.c fn_dsa_internal_test32.c ../crypto/fn_dsa/fn_dsa_core.c ../crypto/fn_dsa/fn_dsa_keygen.c
+  INCLUDE[fn_dsa_internal_test]=../include ../apps/include ../crypto/fn_dsa
+  DEFINE[fn_dsa_internal_test]=FN_DSA_TESTING
+  DEPEND[fn_dsa_internal_test]=../libcrypto.a libtestutil.a
+ENDIF

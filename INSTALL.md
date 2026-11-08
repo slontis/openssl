@@ -626,6 +626,16 @@ never be used in production environments.  It will only work when used with
 gcc or clang and should be used in conjunction with the [no-shared](#no-shared)
 option.
 
+### enable-fn-dsa-test-entropy
+
+Enable a test-only FN-DSA signing entropy override. Disabled by default.
+This exposes `test-entropy` on FN-DSA signing contexts for reproducible tests;
+it supplies a 40-byte nonce followed by a 48-byte private sampler seed.
+It must not be enabled in production builds. Ordinary signing always obtains
+fresh randomness, and a `deterministic` signature parameter is unsupported.
+The option depends on FN-DSA and tests being enabled. Key generation's
+32-byte `seed` parameter is independent of this option.
+
 ### enable-acvp-tests
 
 Build support for Automated Cryptographic Validation Protocol (ACVP)

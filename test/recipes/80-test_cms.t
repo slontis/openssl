@@ -56,7 +56,7 @@ my ($no_des, $no_dh, $no_dsa, $no_ec, $no_ec2m, $no_rc2, $no_zlib)
 
 $no_rc2 = 1 if disabled("legacy");
 
-plan tests => 43;
+plan tests => 44;
 
 ok(run(test(["pkcs7_test", srctop_file("test", "certs", "servercert.pem"),
              srctop_file("test", "certs", "serverkey.pem")])), "test pkcs7");
@@ -1104,6 +1104,37 @@ sub replace_der_oid {
     print $fh $der;
     close($fh);
 }
+
+subtest "RSA envelope with unsupported key encryption algorithm" => sub {
+    plan tests => 5;
+
+    my $cms = "rsa-unsupported-keyalg.der";
+    my $out = "rsa-unsupported-keyalg.txt";
+    my $err = "rsa-unsupported-keyalg.err";
+
+    ok(run(app(["openssl", "cms", @defaultprov, "-encrypt", "-aes-128-gcm",
+                "-in", $smcont, "-outform", "DER", "-out", $cms,
+                "-recip", $smrsa1, "-keyopt", "rsa_padding_mode:oaep"])),
+       "encrypt with RSA-OAEP");
+    ok(run(app(["openssl", "cms", @defaultprov, "-decrypt", "-inform", "DER",
+                "-in", $cms, "-recip", $smrsa1, "-out", $out])),
+       "decrypt with RSA-OAEP");
+    is(compare_text($smcont, $out), 0, "compare decrypted content");
+
+    # Replace rsaesOaep with sha256WithRSAEncryption, preserving DER lengths.
+    # The unsupported OID makes ossl_cms_rsa_envelope() return -1.
+    replace_der_oid($cms, "06092a864886f70d010107", "06092a864886f70d01010b");
+
+    # Retain the RSA error on the error stack to check the failure path.
+    with({ exit_checker => sub { return shift == 4; } }, sub {
+        ok(run(app(["openssl", "cms", @defaultprov, "-decrypt", "-debug_decrypt",
+                    "-inform", "DER", "-in", $cms, "-recip", $smrsa1,
+                    "-out", $out], stderr => $err)),
+           "reject unsupported RSA key encryption algorithm");
+    });
+    like(slurp_file($err), qr/rsa_cms_decrypt:unsupported encryption type/,
+         "RSA envelope reports unsupported encryption type");
+};
 
 subtest "reject signature algorithm OID as digestAlgorithm\n" => sub {
     plan tests => 8;
